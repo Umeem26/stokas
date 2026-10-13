@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minimarket_pos/core/app_exception.dart';
@@ -9,48 +7,9 @@ import 'package:minimarket_pos/data/providers.dart';
 import 'package:minimarket_pos/data/repositories/auth_repository.dart';
 import 'package:minimarket_pos/data/repositories/profile_repository.dart';
 import 'package:minimarket_pos/data/session.dart';
-import 'package:minimarket_pos/presentation/auth_gate.dart';
-import 'package:minimarket_pos/presentation/cashier_screen.dart';
-import 'package:minimarket_pos/presentation/dashboard_screen.dart';
-import 'package:minimarket_pos/presentation/stock_list_screen.dart';
+import 'package:minimarket_pos/presentation/app_shell.dart';
 
-class FakeAuthRepository implements AuthRepository {
-  final _controller = StreamController<AuthChange>.broadcast();
-  String? userId;
-  int signOutCalls = 0;
-
-  FakeAuthRepository([this.userId]);
-
-  @override
-  String? get currentUserId => userId;
-
-  @override
-  Stream<AuthChange> get changes => _controller.stream;
-
-  @override
-  Future<void> signIn(String identifier, String password) async {
-    userId = identifier;
-    _controller.add(AuthChange.signedIn);
-  }
-
-  @override
-  Future<void> signOut() async {
-    signOutCalls++;
-    userId = null;
-    _controller.add(AuthChange.signedOut);
-  }
-}
-
-class FakeProfileRepository implements ProfileRepository {
-  final Map<String, Profile> profiles;
-  FakeProfileRepository(this.profiles);
-
-  @override
-  Future<Profile?> getProfile(String userId) async => profiles[userId];
-
-  @override
-  Future<List<Profile>> getAllProfiles() async => profiles.values.toList();
-}
+import 'fakes.dart';
 
 Profile _profile(String id, AppRole? role, {bool active = true}) =>
     Profile(id: id, fullName: 'User $id', role: role, isActive: active);
@@ -81,12 +40,12 @@ void main() {
       });
     }
 
-    test('profil aktif tiap peran -> SignedIn dengan beranda sesuai peran', () async {
-      final homes = {'owner': DashboardScreen, 'kasir': CashierScreen, 'gudang': StockListScreen};
+    test('profil aktif tiap peran -> SignedIn dengan layar pertama sesuai peran', () async {
+      final homes = {'owner': AppTab.home, 'kasir': AppTab.kasir, 'gudang': AppTab.terima};
       for (final entry in homes.entries) {
         final s = await resolveSession(FakeAuthRepository(entry.key), profiles);
         expect(s, isA<SignedIn>(), reason: entry.key);
-        expect(homeFor((s as SignedIn).profile.role!).runtimeType, entry.value, reason: entry.key);
+        expect(tabsFor((s as SignedIn).profile.role!).first, entry.value, reason: entry.key);
       }
     });
 

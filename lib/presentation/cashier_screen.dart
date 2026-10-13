@@ -3,16 +3,12 @@ import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/app_exception.dart';
 import '../core/format.dart';
-import '../core/permissions.dart';
 import '../data/checkout_controller.dart';
-import '../data/session.dart';
 import '../data/stock_availability.dart';
 import '../data/providers.dart';
 import '../data/transaction_model.dart';
 import 'add_product_screen.dart'; // Untuk pinjam formatter uang
 import 'package:google_fonts/google_fonts.dart';
-import 'history_screen.dart';
-import 'stock_list_screen.dart';
 import 'widgets/account_menu_button.dart';
 import 'widgets/error_view.dart';
 import 'design/stokas_tokens.dart';
@@ -220,28 +216,12 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final role = ref.watch(currentRoleProvider);
     final checkout = ref.watch(checkoutControllerProvider);
     final cart = checkout.items;
-    // Saat Kasir menjadi beranda (peran kasir), sediakan jalan ke Stok & Riwayat.
-    final isHome = !Navigator.of(context).canPop();
     return Scaffold(
       appBar: AppBar(
         title: const Text("Kasir"),
         actions: [
-          if (isHome && can(role, Permission.viewStock))
-            IconButton(
-              icon: const Icon(Icons.inventory_2),
-              tooltip: "Stok Barang",
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StockListScreen()))
-                  .then((_) => _loadProducts()),
-            ),
-          if (isHome && can(role, Permission.viewHistory))
-            IconButton(
-              icon: const Icon(Icons.history),
-              tooltip: "Riwayat Transaksi",
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryScreen())),
-            ),
           const AccountMenuButton(),
         ],
       ),

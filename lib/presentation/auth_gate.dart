@@ -1,31 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/permissions.dart';
 import '../data/session.dart';
-import 'cashier_screen.dart';
-import 'dashboard_screen.dart';
+import 'app_shell.dart';
 import 'login_screen.dart';
-import 'stock_list_screen.dart';
 import 'widgets/error_view.dart';
 
-/// Beranda per peran: owner -> Dashboard, kasir -> Kasir, gudang -> Stok.
-Widget homeFor(AppRole role) {
-  switch (role) {
-    case AppRole.owner:
-      return const DashboardScreen();
-    case AppRole.cashier:
-      return const CashierScreen();
-    case AppRole.warehouse:
-      return const StockListScreen();
-  }
-}
-
-/// Gerbang sesi: tanpa sesi -> LoginScreen, ada sesi -> beranda sesuai peran.
+/// Gerbang sesi: tanpa sesi -> LoginScreen, ada sesi -> AppShell sesuai peran.
+/// [initialPath] = rute awal (deep link); tab tak sah diarahkan ke layar pertama peran.
 class AuthGate extends ConsumerWidget {
   final GlobalKey<NavigatorState>? navigatorKey;
+  final String? initialPath;
 
-  const AuthGate({super.key, this.navigatorKey});
+  const AuthGate({super.key, this.navigatorKey, this.initialPath});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -42,7 +29,8 @@ class AuthGate extends ConsumerWidget {
       ),
       data: (session) => switch (session) {
         SignedOut(:final message) => LoginScreen(message: message),
-        SignedIn(:final profile) => homeFor(profile.role!),
+        // Kunci per akun: logout / ganti akun membuang semua state tab.
+        SignedIn(:final profile) => AppShell(key: ValueKey(profile.id), role: profile.role!, initialPath: initialPath),
       },
     );
   }

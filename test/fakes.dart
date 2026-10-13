@@ -3,7 +3,10 @@ import 'dart:io';
 
 import 'package:minimarket_pos/core/app_exception.dart';
 import 'package:minimarket_pos/data/product_model.dart';
+import 'package:minimarket_pos/data/profile_model.dart';
+import 'package:minimarket_pos/data/repositories/auth_repository.dart';
 import 'package:minimarket_pos/data/repositories/product_repository.dart';
+import 'package:minimarket_pos/data/repositories/profile_repository.dart';
 import 'package:minimarket_pos/data/repositories/stock_repository.dart';
 import 'package:minimarket_pos/data/repositories/transaction_repository.dart';
 import 'package:minimarket_pos/data/transaction_model.dart';
@@ -160,4 +163,43 @@ class FakeProductRepository implements ProductRepository {
 
   @override
   Future<String?> uploadImage(File imageFile) async => null;
+}
+
+/// Auth palsu: [signIn] memakai identifier sebagai id pengguna.
+class FakeAuthRepository implements AuthRepository {
+  final _controller = StreamController<AuthChange>.broadcast();
+  String? userId;
+  int signOutCalls = 0;
+
+  FakeAuthRepository([this.userId]);
+
+  @override
+  String? get currentUserId => userId;
+
+  @override
+  Stream<AuthChange> get changes => _controller.stream;
+
+  @override
+  Future<void> signIn(String identifier, String password) async {
+    userId = identifier;
+    _controller.add(AuthChange.signedIn);
+  }
+
+  @override
+  Future<void> signOut() async {
+    signOutCalls++;
+    userId = null;
+    _controller.add(AuthChange.signedOut);
+  }
+}
+
+class FakeProfileRepository implements ProfileRepository {
+  final Map<String, Profile> profiles;
+  FakeProfileRepository(this.profiles);
+
+  @override
+  Future<Profile?> getProfile(String userId) async => profiles[userId];
+
+  @override
+  Future<List<Profile>> getAllProfiles() async => profiles.values.toList();
 }

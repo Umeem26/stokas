@@ -23,8 +23,9 @@ State management: flutter_riverpod. Kredensial dibaca dari `.env` (SUPABASE_URL,
 - Tes memakai repository palsu di `test/fakes.dart`.
 
 ## Peran (lib/core/permissions.dart, `can(role, Permission)`)
-- owner: semua + Staf. kasir: Kasir, Riwayat, lihat Stok (beranda Kasir).
-- gudang: Stok tambah/edit/mutasi, tanpa ubah harga & tanpa harga modal (beranda Stok).
+- owner: semua + Staf. kasir: Kasir, Riwayat, lihat Stok.
+- gudang: Stok tambah/edit/mutasi, tanpa ubah harga & tanpa harga modal.
+- Navigasi: `presentation/app_shell.dart` (`tabsFor(role)`, tab pertama = layar pertama); rel samping >= 768 px, tab bawah di bawahnya. Layar belum ada = `SegeraHadirView`.
 - Login via `AuthGate` + `SessionController` (lib/data/session.dart); akun staf via Edge Function `staff-admin`.
 
 ## Aturan tetap

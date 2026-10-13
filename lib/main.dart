@@ -49,6 +49,10 @@ class MyApp extends StatelessWidget {
 
       // Pintu Masuk -> Login / beranda sesuai peran
       home: AuthGate(navigatorKey: _navigatorKey),
+      // Rute awal (mis. /staf di web) diteruskan ke AuthGate, bukan ditumpuk sebagai layar.
+      onGenerateInitialRoutes: (path) => [
+        MaterialPageRoute(builder: (_) => AuthGate(navigatorKey: _navigatorKey, initialPath: path)),
+      ],
     );
   }
 }

@@ -7,7 +7,6 @@ import '../data/session.dart';
 import '../data/stock_availability.dart';
 import 'add_product_screen.dart';
 import 'mutation_screen.dart';
-import 'cashier_screen.dart';
 import 'edit_product_screen.dart';
 import 'widgets/account_menu_button.dart';
 import 'widgets/error_view.dart';
@@ -34,20 +33,6 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text("Stok Toko (Real-time)"),
         actions: [
-          if (can(role, Permission.useCashier))
-          IconButton(
-            icon: const Icon(Icons.point_of_sale, size: 30),
-            tooltip: "Menu Kasir",
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const CashierScreen()),
-              ).then((value) {
-                // INI KUNCINYA: Saat kembali, paksa refresh data
-                _refresh();
-              });
-            },
-          ),
           const AccountMenuButton(),
           const SizedBox(width: 10),
         ],
