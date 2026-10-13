@@ -1,3 +1,18 @@
+/// Cara bayar; [code] = nilai kolom `transactions.payment_method` / parameter `p_method`.
+enum PaymentMethod {
+  cash('cash', 'Tunai'),
+  qris('qris', 'QRIS'),
+  transfer('transfer', 'Transfer');
+
+  final String code;
+  final String label;
+  const PaymentMethod(this.code, this.label);
+
+  /// Nilai tak dikenal/kosong dianggap tunai (bawaan kolom di server).
+  static PaymentMethod fromCode(String? code) =>
+      values.firstWhere((m) => m.code == code, orElse: () => PaymentMethod.cash);
+}
+
 /// Transaksi tersimpan (nota). Uang dalam Rupiah bulat.
 class TransactionModel {
   final int id;
@@ -5,6 +20,8 @@ class TransactionModel {
   final int paidAmount;
   final int changeAmount;
   final DateTime createdAt; // Waktu lokal perangkat
+  final PaymentMethod paymentMethod;
+  final String? cashierId; // null pada hasil RPC checkout (pasti pengguna yang login)
   final List<TransactionItem> items; // Kosong bila hanya header yang dimuat
 
   const TransactionModel({
@@ -13,8 +30,24 @@ class TransactionModel {
     required this.paidAmount,
     required this.changeAmount,
     required this.createdAt,
+    this.paymentMethod = PaymentMethod.cash,
+    this.cashierId,
     this.items = const [],
   });
+
+  /// Nomor struk dari `transactions.id` (serial, naik; bisa melompat bila checkout dibatalkan).
+  String get receiptNumber => id.toString().padLeft(6, '0');
+
+  TransactionModel withItems(List<TransactionItem> items) => TransactionModel(
+        id: id,
+        totalAmount: totalAmount,
+        paidAmount: paidAmount,
+        changeAmount: changeAmount,
+        createdAt: createdAt,
+        paymentMethod: paymentMethod,
+        cashierId: cashierId,
+        items: items,
+      );
 
   /// Hasil RPC checkout: {id,total,paid,change,created_at,items:[...]}.
   factory TransactionModel.fromCheckoutJson(Map<String, dynamic> json) {
@@ -24,6 +57,7 @@ class TransactionModel {
       paidAmount: (json['paid'] as num).round(),
       changeAmount: (json['change'] as num).round(),
       createdAt: DateTime.parse(json['created_at']).toLocal(),
+      paymentMethod: PaymentMethod.fromCode(json['payment_method'] as String?),
       items: [
         for (final i in (json['items'] as List? ?? const []))
           TransactionItem.fromCheckoutJson(Map<String, dynamic>.from(i as Map)),
@@ -39,6 +73,8 @@ class TransactionModel {
       paidAmount: (row['paid_amount'] as num? ?? 0).round(),
       changeAmount: (row['change_amount'] as num? ?? 0).round(),
       createdAt: DateTime.parse(row['created_at']).toLocal(),
+      paymentMethod: PaymentMethod.fromCode(row['payment_method'] as String?),
+      cashierId: row['cashier_id'] as String?,
     );
   }
 }

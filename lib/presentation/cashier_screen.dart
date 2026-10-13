@@ -5,18 +5,23 @@ import '../core/app_exception.dart';
 import '../core/format.dart';
 import '../data/checkout_controller.dart';
 import '../data/providers.dart';
+import '../data/session.dart';
 import '../data/stock_availability.dart';
 import '../data/transaction_model.dart';
 import 'app_shell.dart' show railBreakpoint;
 import 'cashier/cashier_widgets.dart';
+import 'cashier/pay_panel.dart';
 import 'design/stokas_button.dart';
 import 'design/stokas_tokens.dart';
+import 'receipt_download.dart';
 import 'widgets/account_menu_button.dart';
 import 'widgets/error_view.dart';
 
-/// Layar Kasir. Lebar >= 768: dua panel (produk | keranjang 408 px).
-/// Di bawahnya satu kolom dengan bilah "Keranjang (n) · Rp ..." yang membuka keranjang layar penuh.
+/// Layar Kasir. Lebar >= 768: dua panel (produk | keranjang 408 px); saat bayar menjadi
+/// (ringkasan pesanan | panel bayar 480 px). Di bawahnya satu kolom dengan bilah
+/// "Keranjang (n) · Rp ..." yang membuka keranjang layar penuh; panel bayar layar penuh.
 /// Keranjang ada di [checkoutControllerProvider], jadi tidak hilang saat muat ulang/bayar gagal.
+/// Setelah sukses tampil layar selesai sampai "Transaksi baru".
 class CashierScreen extends ConsumerStatefulWidget {
   const CashierScreen({super.key});
 
@@ -33,6 +38,10 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
   Object? _loadError; // terisi jika daftar barang gagal dimuat
   String _query = '';
   String? _category; // null = Semua
+
+  bool _payOpen = false; // panel bayar menggantikan keranjang
+  String? _payError; // pesan gagal bayar terakhir (apa adanya dari server)
+  String? _problemProductId; // baris keranjang yang ditolak server
 
   bool get _wide => MediaQuery.sizeOf(context).width >= railBreakpoint;
 
@@ -123,9 +132,14 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
   }
 
   /// Enter di kolom cari (scan): `products.id` persis dulu, baru nama.
+  /// Enter di kolom kosong dengan keranjang terisi = buka panel bayar.
   void _submitSearch(String text) {
     if (text.trim().isEmpty) {
-      _refocusSearch();
+      if (ref.read(checkoutControllerProvider).items.isNotEmpty) {
+        _openPay();
+      } else {
+        _refocusSearch();
+      }
       return;
     }
     final match = findScanMatch(_allProducts, text);
@@ -147,42 +161,75 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
     _refocusSearch();
   }
 
-  /// Alur bayar sementara (isian uang tunai). Gagal: keranjang & kunci transaksi tetap,
-  /// jadi bayar ulang aman. True bila transaksi tersimpan.
-  Future<bool> _pay() async {
+  void _openPay() {
     final checkout = ref.read(checkoutControllerProvider);
-    if (checkout.isPaying || checkout.items.isEmpty) return false;
-    final paid = await showPayDialog(context, checkout.total);
-    if (paid == null || !mounted) return false;
-
-    final TransactionModel? transaction;
-    try {
-      transaction = await ref.read(checkoutControllerProvider.notifier).pay(paid);
-    } on InsufficientStockException catch (e) {
-      // Stok berubah sejak dimuat: muat ulang agar angka stok di layar benar.
-      await _loadProducts();
-      if (mounted) _showMessage('${e.message}. Stok sudah dimuat ulang, sesuaikan keranjang.', error: true);
-      return false;
-    } catch (e) {
-      if (mounted) _showMessage('$e', error: true);
-      return false;
-    }
-    if (transaction == null || !mounted) return false;
-
-    _loadProducts();
-    await showReceiptDialog(context, transaction);
-    _refocusSearch();
-    return true;
+    if (checkout.items.isEmpty || checkout.isLocked) return;
+    setState(() {
+      _payOpen = true;
+      _payError = null;
+      _problemProductId = null;
+    });
   }
 
-  Widget _cartPanel(CheckoutState checkout, {required VoidCallback onPay}) {
+  void _closePay() {
+    if (ref.read(checkoutControllerProvider).isPaying) return;
+    setState(() {
+      _payOpen = false;
+      _payError = null;
+      _problemProductId = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refocusSearch());
+  }
+
+  /// Gagal: panel, keranjang, dan kunci transaksi tetap (bayar ulang aman); pesan server
+  /// ditampilkan apa adanya dan baris yang ditolak ditandai bila bisa dikenali.
+  Future<void> _submitPay(int paid, PaymentMethod method) async {
+    setState(() {
+      _payError = null;
+      _problemProductId = null;
+    });
+    final items = ref.read(checkoutControllerProvider).items;
+    try {
+      final tx = await ref.read(checkoutControllerProvider.notifier).pay(paid, method: method);
+      if (tx == null || !mounted) return;
+      setState(() => _payOpen = false);
+      ref.invalidate(transactionHistoryProvider);
+      _loadProducts();
+    } on AppException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _payError = e.message;
+        _problemProductId = problemProductId(e.message, items, hintProductId: e is InsufficientStockException ? e.productId : null);
+      });
+      // Stok berubah sejak dimuat: perbarui angka stok di kisi.
+      if (e is InsufficientStockException) _loadProducts();
+    } catch (e) {
+      if (mounted) setState(() => _payError = '$e');
+    }
+  }
+
+  void _startNew() {
+    ref.read(checkoutControllerProvider.notifier).startNew();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refocusSearch());
+  }
+
+  Widget _payPanel(CheckoutState checkout, {Widget? header}) => PayPanel(
+        total: checkout.total,
+        busy: checkout.isPaying,
+        error: _payError,
+        header: header,
+        onPay: _submitPay,
+        onBack: _closePay,
+      );
+
+  Widget _cartPanel(CheckoutState checkout, {VoidCallback? onPay}) {
     final notifier = ref.read(checkoutControllerProvider.notifier);
     return CartPanel(
       checkout: checkout,
       onIncrement: _increment,
       onDecrement: notifier.decrement,
       onRemove: notifier.remove,
-      onPay: onPay,
+      onPay: onPay ?? _openPay,
       onClear: _clearCart,
     );
   }
@@ -291,52 +338,83 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
     );
   }
 
+  Widget _body(CheckoutState checkout) {
+    final c = context.stokas;
+    final done = checkout.completed;
+    if (done != null) {
+      return CheckoutDoneView(
+        transaction: done,
+        onNewTransaction: _startNew,
+        onDownload: () => downloadReceipt(context, ref, done, cashierName: ref.read(currentProfileProvider)?.fullName ?? ''),
+      );
+    }
+
+    if (_wide) {
+      return Row(
+        key: const Key('cashier-two-panel'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: _payOpen
+                ? OrderSummary(items: checkout.items, total: checkout.total, problemProductId: _problemProductId)
+                : _buildProducts(wide: true),
+          ),
+          VerticalDivider(width: 1, color: c.line),
+          SizedBox(
+            key: Key(_payOpen ? 'cashier-pay-panel' : 'cashier-cart-panel'),
+            width: _payOpen ? payPanelWidth : cartPanelWidth,
+            child: Material(color: c.surface, child: _payOpen ? _payPanel(checkout) : _cartPanel(checkout)),
+          ),
+        ],
+      );
+    }
+
+    if (_payOpen) {
+      return Material(
+        key: const Key('cashier-pay-panel'),
+        color: c.surface,
+        child: _payPanel(checkout, header: OrderSummaryTile(items: checkout.items, problemProductId: _problemProductId)),
+      );
+    }
+    return Column(
+      key: const Key('cashier-one-column'),
+      children: [
+        Expanded(child: _buildProducts(wide: false)),
+        DecoratedBox(
+          decoration: BoxDecoration(color: c.surface, border: Border(top: BorderSide(color: c.line))),
+          child: Padding(
+            padding: const EdgeInsets.all(StokasSpace.s3),
+            child: StokasButton(
+              key: const Key('cart-bar'),
+              label: 'Keranjang (${checkout.items.length}) · ${formatRupiah(checkout.total)}',
+              icon: Icons.shopping_cart_outlined,
+              expand: true,
+              onPressed: _openCart,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final checkout = ref.watch(checkoutControllerProvider);
-    final c = context.stokas;
-    final wide = _wide;
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Kasir'), actions: const [AccountMenuButton()]),
-      body: wide
-          ? Row(
-              key: const Key('cashier-two-panel'),
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: _buildProducts(wide: true)),
-                VerticalDivider(width: 1, color: c.line),
-                SizedBox(
-                  key: const Key('cashier-cart-panel'),
-                  width: cartPanelWidth,
-                  child: ColoredBox(color: c.surface, child: _cartPanel(checkout, onPay: _pay)),
-                ),
-              ],
-            )
-          : Column(
-              key: const Key('cashier-one-column'),
-              children: [
-                Expanded(child: _buildProducts(wide: false)),
-                DecoratedBox(
-                  decoration: BoxDecoration(color: c.surface, border: Border(top: BorderSide(color: c.line))),
-                  child: Padding(
-                    padding: const EdgeInsets.all(StokasSpace.s3),
-                    child: StokasButton(
-                      key: const Key('cart-bar'),
-                      label: 'Keranjang (${checkout.items.length}) · ${formatRupiah(checkout.total)}',
-                      icon: Icons.shopping_cart_outlined,
-                      expand: true,
-                      onPressed: _openCart,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+    // Tombol kembali sistem menutup panel bayar, bukan layar Kasir.
+    return PopScope(
+      canPop: !_payOpen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _payOpen) _closePay();
+      },
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Kasir'), actions: const [AccountMenuButton()]),
+        body: _body(checkout),
+      ),
     );
   }
 }
 
-/// Keranjang layar penuh (HP). Memakai state & aksi layar Kasir; tertutup sendiri setelah bayar berhasil.
+/// Keranjang layar penuh (HP). Memakai state & aksi layar Kasir; "Bayar" menutupnya dan membuka panel bayar.
 class _CartPage extends ConsumerWidget {
   final _CashierScreenState screen;
 
@@ -351,8 +429,9 @@ class _CartPage extends ConsumerWidget {
       body: SafeArea(
         child: screen._cartPanel(
           checkout,
-          onPay: () async {
-            if (await screen._pay() && context.mounted) Navigator.pop(context);
+          onPay: () {
+            Navigator.pop(context);
+            screen._openPay();
           },
         ),
       ),

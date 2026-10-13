@@ -23,3 +23,12 @@ bool isExpiredOn(String? expiryDate, DateTime now) {
   final d = DateTime.parse(expiryDate.substring(0, 10));
   return DateTime.utc(d.year, d.month, d.day).isBefore(jakartaToday(now));
 }
+
+const _monthsId = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
+/// Waktu struk dalam WIB, mis. "13 Okt 2026 14.30 WIB" (24 jam, titik pemisah), zona perangkat diabaikan.
+String formatWibDateTime(DateTime instant) {
+  final t = instant.toUtc().add(jakartaOffset);
+  String two(int v) => v.toString().padLeft(2, '0');
+  return '${t.day} ${_monthsId[t.month - 1]} ${t.year} ${two(t.hour)}.${two(t.minute)} WIB';
+}

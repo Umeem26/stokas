@@ -6,6 +6,7 @@ import 'package:minimarket_pos/core/app_exception.dart';
 import 'package:minimarket_pos/data/checkout_controller.dart';
 import 'package:minimarket_pos/data/providers.dart';
 import 'package:minimarket_pos/data/stock_availability.dart';
+import 'package:minimarket_pos/data/transaction_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'fakes.dart';
@@ -83,14 +84,21 @@ void main() {
       expect(repo.transactionCount, 1);
     });
 
-    test('kunci baru dan keranjang kosong setelah sukses', () async {
+    test('sukses -> layar selesai (keranjang terkunci); Transaksi baru -> keranjang kosong + kunci baru', () async {
       controller().add(product('A'));
       final key = state().idempotencyKey;
       final tx = await controller().pay(10000);
 
       expect(tx!.totalAmount, 3500);
       expect(tx.changeAmount, 6500);
+      expect(state().completed, same(tx));
+      expect(state().idempotencyKey, key);
+      expect(controller().add(product('B')), 'Mulai transaksi baru dulu');
+      expect(await controller().pay(10000), isNull, reason: 'tidak membayar dua kali');
+
+      controller().startNew();
       expect(state().items, isEmpty);
+      expect(state().completed, isNull);
       expect(state().idempotencyKey, isNot(key));
 
       controller().add(product('B'));
@@ -136,6 +144,7 @@ void main() {
 
     final call = repo.calls.single;
     expect(call.paid, 10000);
+    expect(call.method, PaymentMethod.cash, reason: 'Tunai bawaan');
     expect({for (final i in call.items) i.productId: i.quantity}, {'A': 2, 'B': 1});
   });
 
@@ -164,8 +173,17 @@ void main() {
       expect(e.message, noAccessMessage);
     });
 
-    test('error jaringan/tak dikenal -> pesan umum, bukan detail teknis', () {
-      final e = mapCheckoutError(Exception('SocketException: Failed host lookup'));
+    test('jaringan putus -> NetworkException "Tidak ada koneksi. Keranjang aman, coba lagi."', () {
+      for (final error in [Exception('SocketException: Failed host lookup'), Exception('ClientException: Failed to fetch'), TimeoutException('t')]) {
+        final e = mapCheckoutError(error);
+        expect(e, isA<NetworkException>(), reason: '$error');
+        expect(e.message, 'Tidak ada koneksi. Keranjang aman, coba lagi.');
+      }
+    });
+
+    test('error tak dikenal -> pesan umum, bukan detail teknis', () {
+      final e = mapCheckoutError(Exception('boom'));
+      expect(e, isNot(isA<NetworkException>()));
       expect(e.message, 'Gagal memproses pembayaran. Coba lagi.');
     });
   });

@@ -13,3 +13,6 @@ String usernameToEmail(String input) {
 
 /// Lokasi stok yang dipakai di form barang, mutasi, stok masuk, dan opname.
 const storeFloors = ['Lantai 1', 'Lantai 2'];
+
+/// Nama toko di kepala struk PDF.
+const storeName = 'Toko';

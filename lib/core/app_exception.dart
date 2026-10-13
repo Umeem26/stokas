@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -21,6 +23,22 @@ class InsufficientStockException extends AppException {
   const InsufficientStockException(super.message, this.productId, [super.cause]);
 }
 
+/// Permintaan tidak sampai ke server (jaringan putus/DNS/timeout).
+class NetworkException extends AppException {
+  const NetworkException(super.message, [super.cause]);
+}
+
+const checkoutOfflineMessage = 'Tidak ada koneksi. Keranjang aman, coba lagi.';
+
+/// Error dari lapisan HTTP/soket (bukan jawaban server). Dicek lewat nama tipe dan teks
+/// karena SocketException (dart:io) dan ClientException (http) tidak tersedia di semua platform.
+bool isNetworkError(Object error) {
+  if (error is TimeoutException) return true;
+  final text = '${error.runtimeType} $error';
+  const markers = ['SocketException', 'ClientException', 'HandshakeException', 'Failed host lookup', 'Failed to fetch', 'XMLHttpRequest error'];
+  return markers.any(text.contains);
+}
+
 /// Terjemahkan [error] menjadi [AppException] berpesan [message].
 /// Penolakan akses (Postgres 42501) menjadi [noAccessMessage]; pesan dari
 /// `raise exception` (P0001, sudah berbahasa Indonesia) diteruskan apa adanya.
@@ -33,8 +51,10 @@ AppException mapError(String message, Object error) {
   return AppException(message, error);
 }
 
-/// Seperti [mapError], ditambah "Stok tidak cukup" (P0001 + hint product_id) dari RPC checkout.
+/// Seperti [mapError], ditambah "Stok tidak cukup" (P0001 + hint product_id) dari RPC checkout
+/// dan [NetworkException] bila server tidak terjangkau.
 AppException mapCheckoutError(Object error) {
+  if (isNetworkError(error)) return NetworkException(checkoutOfflineMessage, error);
   if (error is PostgrestException &&
       error.code == 'P0001' &&
       error.message.startsWith('Stok tidak cukup') &&

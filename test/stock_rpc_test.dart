@@ -129,7 +129,8 @@ void main() {
 
     expect(transactions.calls, hasLength(1));
     expect(stock.loads, 2);
-    expect(find.textContaining('Stok tidak cukup: Barang A (tersedia 1). Stok sudah dimuat ulang'), findsOneWidget);
+    expect(find.text('Stok tidak cukup: Barang A (tersedia 1)'), findsOneWidget, reason: 'pesan server apa adanya');
+    expect(find.byKey(const ValueKey('summary-problem-A')), findsOneWidget, reason: 'baris bermasalah ditandai');
     expect(find.text('Barang A'), findsWidgets, reason: 'keranjang tetap');
   });
 

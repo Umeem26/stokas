@@ -16,10 +16,12 @@ class CheckoutCall {
   final String key;
   final List<CartItem> items;
   final int paid;
-  CheckoutCall(this.key, this.items, this.paid);
+  final PaymentMethod method;
+  CheckoutCall(this.key, this.items, this.paid, this.method);
 }
 
-/// Repository palsu: meniru RPC checkout (idempoten per kunci). [nextError] dilempar sekali;
+/// Repository palsu: meniru RPC checkout (idempoten per kunci; uang kurang dan QRIS/transfer
+/// yang tidak pas ditolak seperti server). [nextError] dilempar sekali;
 /// [gate] menahan jawaban sampai di-complete (untuk uji tap ganda).
 class FakeTransactionRepository implements TransactionRepository {
   final calls = <CheckoutCall>[];
@@ -29,22 +31,32 @@ class FakeTransactionRepository implements TransactionRepository {
   int _nextId = 1;
 
   @override
-  Future<TransactionModel> checkout({required String idempotencyKey, required List<CartItem> items, required int paid}) async {
-    calls.add(CheckoutCall(idempotencyKey, items, paid));
+  Future<TransactionModel> checkout({
+    required String idempotencyKey,
+    required List<CartItem> items,
+    required int paid,
+    required PaymentMethod method,
+  }) async {
+    calls.add(CheckoutCall(idempotencyKey, items, paid, method));
     if (gate != null) await gate!.future;
     final error = nextError;
     if (error != null) {
       nextError = null;
       throw error;
     }
+    final existing = _byKey[idempotencyKey];
+    if (existing != null) return existing;
+    final total = items.fold(0, (s, i) => s + i.subtotal);
+    if (paid < total) throw const AppException('Uang bayar kurang dari total');
+    if (method != PaymentMethod.cash && paid != total) throw const AppException('QRIS dan transfer harus dibayar pas');
     return _byKey.putIfAbsent(idempotencyKey, () {
-      final total = items.fold(0, (s, i) => s + i.subtotal);
       return TransactionModel(
         id: _nextId++,
         totalAmount: total,
         paidAmount: paid,
         changeAmount: paid - total,
         createdAt: DateTime.now(),
+        paymentMethod: method,
         items: [
           for (final i in items)
             TransactionItem(productId: i.productId, productName: i.productName, quantity: i.quantity, price: i.price, subtotal: i.subtotal),

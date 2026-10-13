@@ -7,8 +7,14 @@ import '../transaction_model.dart';
 /// Transaksi hanya dibaca; penulisan lewat RPC checkout (atomik & idempoten).
 abstract class TransactionRepository {
   /// Bayar keranjang. [idempotencyKey] yang sama tidak akan membuat transaksi ganda.
-  /// Stok kurang -> [InsufficientStockException]; error lain -> [AppException] berpesan server.
-  Future<TransactionModel> checkout({required String idempotencyKey, required List<CartItem> items, required int paid});
+  /// QRIS/transfer wajib [paid] = total (server menolak lebih). Stok kurang ->
+  /// [InsufficientStockException]; jaringan putus -> [NetworkException]; lainnya -> [AppException] berpesan server.
+  Future<TransactionModel> checkout({
+    required String idempotencyKey,
+    required List<CartItem> items,
+    required int paid,
+    required PaymentMethod method,
+  });
 
   /// Transaksi sejak tengah malam Asia/Jakarta untuk instan [now].
   Future<List<TransactionModel>> getTodayTransactions(DateTime now);
@@ -24,12 +30,18 @@ class SupabaseTransactionRepository implements TransactionRepository {
   SupabaseTransactionRepository(this._client);
 
   @override
-  Future<TransactionModel> checkout({required String idempotencyKey, required List<CartItem> items, required int paid}) {
+  Future<TransactionModel> checkout({
+    required String idempotencyKey,
+    required List<CartItem> items,
+    required int paid,
+    required PaymentMethod method,
+  }) {
     return guard('Gagal memproses pembayaran', map: mapCheckoutError, () async {
       final result = await _client.rpc('checkout', params: {
         'p_key': idempotencyKey,
         'p_items': [for (final i in items) {'product_id': i.productId, 'qty': i.quantity}],
         'p_paid': paid,
+        'p_method': method.code,
       });
       return TransactionModel.fromCheckoutJson(Map<String, dynamic>.from(result as Map));
     });

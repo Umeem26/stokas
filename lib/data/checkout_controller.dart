@@ -12,14 +12,22 @@ final idempotencyKeyFactoryProvider = Provider<String Function()>((ref) => uuidV
 class CheckoutState {
   final List<CartItem> items;
 
-  /// Kunci untuk isi keranjang ini. Dipakai ulang saat bayar diulang (mis. setelah gagal
-  /// jaringan) agar server tidak mencatat transaksi ganda; diganti saat isi keranjang berubah.
+  /// Kunci untuk satu upaya bayar atas isi keranjang ini. Dipakai ulang saat bayar diulang
+  /// (mis. setelah gagal jaringan) agar server tidak mencatat transaksi ganda; diganti saat
+  /// isi keranjang berubah dan saat "Transaksi baru".
   final String idempotencyKey;
   final bool isPaying;
 
-  const CheckoutState({required this.items, required this.idempotencyKey, this.isPaying = false});
+  /// Transaksi yang baru tersimpan (layar selesai). Selama terisi, keranjang terkunci
+  /// sampai [CheckoutController.startNew].
+  final TransactionModel? completed;
+
+  const CheckoutState({required this.items, required this.idempotencyKey, this.isPaying = false, this.completed});
 
   int get total => calculateTotal(items);
+
+  /// Keranjang tidak boleh diubah (sedang bayar atau menunggu "Transaksi baru").
+  bool get isLocked => isPaying || completed != null;
 
   num quantityOf(String productId) {
     for (final i in items) {
@@ -43,6 +51,7 @@ class CheckoutController extends Notifier<CheckoutState> {
   /// melebihi stok tersedia atau sedang memproses bayar; null jika berhasil.
   String? add(SellableProduct product) {
     if (state.isPaying) return 'Pembayaran sedang diproses';
+    if (state.completed != null) return 'Mulai transaksi baru dulu';
     final inCart = state.quantityOf(product.id);
     final error = cartAddError(inCart: inCart, available: product.available);
     if (error != null) return error;
@@ -60,7 +69,7 @@ class CheckoutController extends Notifier<CheckoutState> {
 
   /// Kurangi 1; item dibuang bila jumlahnya habis.
   void decrement(String productId) {
-    if (state.isPaying) return;
+    if (state.isLocked) return;
     final items = [...state.items];
     final index = items.indexWhere((i) => i.productId == productId);
     if (index < 0) return;
@@ -75,22 +84,23 @@ class CheckoutController extends Notifier<CheckoutState> {
 
   /// Buang satu baris keranjang.
   void remove(String productId) {
-    if (state.isPaying) return;
+    if (state.isLocked) return;
     final items = state.items.where((i) => i.productId != productId).toList();
     if (items.length != state.items.length) _setItems(items);
   }
 
   /// Kosongkan keranjang (UI wajib meminta konfirmasi dulu).
   void clear() {
-    if (state.isPaying || state.items.isEmpty) return;
+    if (state.isLocked || state.items.isEmpty) return;
     _setItems(const []);
   }
 
-  /// Bayar dengan uang [paid] (Rupiah). Sukses: keranjang dikosongkan & kunci baru.
+  /// Bayar dengan uang [paid] (Rupiah) dan [method]. Sukses: transaksi disimpan di
+  /// [CheckoutState.completed]; keranjang & kunci tetap sampai [startNew].
   /// Gagal: keranjang dan kunci tetap, sehingga percobaan ulang aman. Panggilan saat
-  /// pembayaran masih berjalan (tap ganda) mengembalikan null tanpa memanggil server.
-  Future<TransactionModel?> pay(int paid) async {
-    if (state.isPaying || state.items.isEmpty) return null;
+  /// pembayaran masih berjalan (tap ganda) atau sesudah sukses mengembalikan null tanpa memanggil server.
+  Future<TransactionModel?> pay(int paid, {PaymentMethod method = PaymentMethod.cash}) async {
+    if (state.isLocked || state.items.isEmpty) return null;
     final attempt = state;
     state = CheckoutState(items: attempt.items, idempotencyKey: attempt.idempotencyKey, isPaying: true);
     try {
@@ -98,13 +108,22 @@ class CheckoutController extends Notifier<CheckoutState> {
             idempotencyKey: attempt.idempotencyKey,
             items: attempt.items,
             paid: paid,
+            method: method,
           );
-      if (ref.mounted) _setItems(const []);
+      if (ref.mounted) {
+        state = CheckoutState(items: attempt.items, idempotencyKey: attempt.idempotencyKey, completed: tx);
+      }
       return tx;
     } catch (_) {
       if (ref.mounted) state = attempt;
       rethrow;
     }
+  }
+
+  /// "Transaksi baru": keranjang kosong, kunci baru, layar selesai ditutup.
+  void startNew() {
+    if (state.isPaying) return;
+    _setItems(const []);
   }
 }
 
