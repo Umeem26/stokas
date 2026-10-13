@@ -5,7 +5,9 @@ import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart'; // Plugin Foto
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/product_model.dart';
+import '../core/permissions.dart';
 import '../data/providers.dart';
+import '../data/session.dart';
 
 class AddProductScreen extends ConsumerStatefulWidget {
   const AddProductScreen({super.key});
@@ -89,8 +91,10 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           imageUrl = await service.uploadImage(_imageFile!);
         }
 
-        final cleanPrice = _priceController.text.replaceAll('.', '');
-        final cleanCapital = _capitalPriceController.text.replaceAll('.', '');
+        // Non-owner tidak mengisi harga; disimpan 0 lalu diisi owner.
+        final canEditPrices = can(ref.read(currentRoleProvider), Permission.editPrices);
+        final cleanPrice = canEditPrices ? _priceController.text.replaceAll('.', '') : '0';
+        final cleanCapital = canEditPrices ? _capitalPriceController.text.replaceAll('.', '') : '0';
 
         final product = ProductModel(
           id: _idController.text,
@@ -189,13 +193,16 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                   ),
                   const Divider(height: 40, thickness: 1),
                   
-                  Row(
-                    children: [
-                      Expanded(child: _buildTextField(_capitalPriceController, "Harga Modal", Icons.monetization_on_outlined, isCurrency: true)),
-                      const SizedBox(width: 10),
-                      Expanded(child: _buildTextField(_priceController, "Harga Jual", Icons.sell, isCurrency: true)),
-                    ],
-                  ),
+                  if (can(ref.watch(currentRoleProvider), Permission.editPrices))
+                    Row(
+                      children: [
+                        Expanded(child: _buildTextField(_capitalPriceController, "Harga Modal", Icons.monetization_on_outlined, isCurrency: true)),
+                        const SizedBox(width: 10),
+                        Expanded(child: _buildTextField(_priceController, "Harga Jual", Icons.sell, isCurrency: true)),
+                      ],
+                    )
+                  else
+                    const Text("Harga jual & harga modal diisi oleh owner.", style: TextStyle(color: Colors.grey)),
                   const Divider(height: 40, thickness: 1),
 
                   Row(

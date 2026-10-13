@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; // Untuk format Rupiah
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/permissions.dart';
 import '../data/providers.dart';
+import '../data/session.dart';
 import 'add_product_screen.dart';
 import 'mutation_screen.dart';
 import 'cashier_screen.dart';
 import 'edit_product_screen.dart';
+import 'widgets/account_menu_button.dart';
 import 'widgets/error_view.dart';
 
 class StockListScreen extends ConsumerStatefulWidget {
@@ -27,9 +30,11 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final role = ref.watch(currentRoleProvider);
     return Scaffold(
       appBar: AppBar(title: const Text("Stok Toko (Real-time)"),
         actions: [
+          if (can(role, Permission.useCashier))
           IconButton(
             icon: const Icon(Icons.point_of_sale, size: 30),
             tooltip: "Menu Kasir",
@@ -43,6 +48,7 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
               });
             },
           ),
+          const AccountMenuButton(),
           const SizedBox(width: 10),
         ],
       ),
@@ -147,6 +153,7 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
                           
                           // Tombol Mutasi
                           // --- TOMBOL MUTASI (PINDAH) ---
+                          if (can(role, Permission.moveStock))
                           IconButton(
                             icon: const Icon(Icons.swap_horiz, color: Color(0xFFEF6C00), size: 30),
                             tooltip: "Pindah Lantai",
@@ -159,6 +166,7 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
                           ),
                           
                           // --- TOMBOL EDIT (BARU) ---
+                          if (can(role, Permission.editProduct))
                           IconButton(
                             icon: const Icon(Icons.edit, color: Colors.grey),
                             tooltip: "Edit Barang",
@@ -185,7 +193,7 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: !can(role, Permission.addProduct) ? null : FloatingActionButton.extended(
         backgroundColor: Theme.of(context).colorScheme.secondary,
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text("Tambah Barang", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),

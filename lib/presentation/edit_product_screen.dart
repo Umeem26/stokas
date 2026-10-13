@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/product_model.dart';
+import '../core/permissions.dart';
 import '../data/providers.dart';
+import '../data/session.dart';
 import 'add_product_screen.dart'; // Pinjam Formatter Rupiah
 
 class EditProductScreen extends ConsumerStatefulWidget {
@@ -65,7 +67,11 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
           capitalPrice: double.parse(cleanCapital),
         );
 
-        await ref.read(productRepositoryProvider).updateProduct(product);
+        // Non-owner tidak mengirim harga sama sekali (penjagaan DB: trigger + Fase 2).
+        await ref.read(productRepositoryProvider).updateProduct(
+              product,
+              includePrices: can(ref.read(currentRoleProvider), Permission.editPrices),
+            );
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Data Berhasil Diperbarui!")));
@@ -111,10 +117,12 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final role = ref.watch(currentRoleProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text("Edit Produk"),
         actions: [
+          if (can(role, Permission.deleteProduct))
           IconButton(
             icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
             tooltip: "Hapus Barang",
@@ -151,13 +159,19 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                     ],
                   ),
                   const Divider(height: 30),
-                  Row(
-                    children: [
-                      Expanded(child: _buildTextField(_capitalPriceController, "Modal", Icons.monetization_on, isCurrency: true)),
-                      const SizedBox(width: 10),
-                      Expanded(child: _buildTextField(_priceController, "Jual", Icons.sell, isCurrency: true)),
-                    ],
-                  ),
+                  if (can(role, Permission.editPrices))
+                    Row(
+                      children: [
+                        if (can(role, Permission.viewCapitalPrice)) ...[
+                          Expanded(child: _buildTextField(_capitalPriceController, "Modal", Icons.monetization_on, isCurrency: true)),
+                          const SizedBox(width: 10),
+                        ],
+                        Expanded(child: _buildTextField(_priceController, "Jual", Icons.sell, isCurrency: true)),
+                      ],
+                    )
+                  else
+                    // Harga jual hanya bisa dilihat; harga modal disembunyikan.
+                    _buildTextField(_priceController, "Jual (hanya owner yang bisa mengubah)", Icons.sell, isCurrency: true, readOnly: true),
                   const SizedBox(height: 15),
                   _buildTextField(_minStockController, "Min. Stok Alert", Icons.warning_amber, isNumber: true),
                   
@@ -181,9 +195,10 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
   }
 
   // --- Widget Helper (Sama seperti AddProduct) ---
-  Widget _buildTextField(TextEditingController c, String l, IconData i, {bool isNumber = false, bool isCurrency = false}) {
+  Widget _buildTextField(TextEditingController c, String l, IconData i, {bool isNumber = false, bool isCurrency = false, bool readOnly = false}) {
     return TextFormField(
       controller: c,
+      readOnly: readOnly,
       keyboardType: isCurrency ? TextInputType.number : (isNumber ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text),
       inputFormatters: isCurrency ? [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()] : null,
       decoration: InputDecoration(labelText: l, prefixIcon: Icon(i, color: Colors.blue), suffixText: isCurrency ? "IDR" : null),

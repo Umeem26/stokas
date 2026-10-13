@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/permissions.dart';
 import '../data/providers.dart';
+import '../data/session.dart';
 import 'stock_list_screen.dart';
 import 'cashier_screen.dart';
 import 'add_product_screen.dart';
 import 'history_screen.dart';
+import 'staff_screen.dart';
+import 'widgets/account_menu_button.dart';
 import 'widgets/error_view.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -36,7 +40,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             icon: const Icon(Icons.refresh),
             onPressed: _loadDashboardData,
             tooltip: "Refresh Data",
-          )
+          ),
+          const AccountMenuButton(),
         ],
       ),
       body: summary.when(
@@ -49,6 +54,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Widget _buildContent(DashboardSummary data) {
+    final role = ref.watch(currentRoleProvider);
     return SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -128,24 +134,28 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   crossAxisSpacing: 15,
                   mainAxisSpacing: 15,
                   children: [
+                    if (can(role, Permission.useCashier))
                     _buildMenuCard(
                       title: "Kasir",
                       icon: Icons.point_of_sale,
                       color: Colors.green,
                       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CashierScreen())).then((_) => _loadDashboardData()),
                     ),
+                    if (can(role, Permission.viewStock))
                     _buildMenuCard(
                       title: "Stok Barang",
                       icon: Icons.inventory_2,
                       color: Colors.blue,
                       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StockListScreen())).then((_) => _loadDashboardData()),
                     ),
+                    if (can(role, Permission.addProduct))
                     _buildMenuCard(
                       title: "Input Barang",
                       icon: Icons.add_box,
                       color: Colors.orange,
                       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddProductScreen())).then((_) => _loadDashboardData()),
                     ),
+                    if (can(role, Permission.viewHistory))
                     _buildMenuCard(
                       title: "Laporan", // Atau ganti jadi "Riwayat"
                       icon: Icons.history, // Ganti icon jadi history biar cocok
@@ -155,6 +165,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                          Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryScreen()));
                       }, 
                     ),
+                    if (can(role, Permission.manageStaff))
+                      _buildMenuCard(
+                        title: "Staf",
+                        icon: Icons.people,
+                        color: Colors.teal,
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StaffScreen())),
+                      ),
                   ],
                 ),
               ],

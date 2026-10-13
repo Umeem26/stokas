@@ -12,7 +12,8 @@ abstract class ProductRepository {
   /// Simpan produk baru beserta stok awalnya.
   Future<void> addProduct(ProductModel product, String floor, double initialQty, DateTime? expiry, String? imageUrl);
 
-  Future<void> updateProduct(ProductModel product);
+  /// [includePrices] false: harga jual & modal tidak dikirim (peran non-owner).
+  Future<void> updateProduct(ProductModel product, {bool includePrices = true});
 
   /// Soft delete: produk ditandai is_deleted agar riwayat transaksi tetap aman.
   Future<void> deleteProduct(String productId);
@@ -59,15 +60,15 @@ class SupabaseProductRepository implements ProductRepository {
   }
 
   @override
-  Future<void> updateProduct(ProductModel product) {
+  Future<void> updateProduct(ProductModel product, {bool includePrices = true}) {
     return guard('Gagal memperbarui barang', () async {
       await _client.from('products').update({
         'brand_name': product.brandName,
         'category_id': product.categoryId,
         'unit_type': product.unitType,
         'min_stock': product.minStock,
-        'price': product.price,
-        'capital_price': product.capitalPrice,
+        if (includePrices) 'price': product.price,
+        if (includePrices) 'capital_price': product.capitalPrice,
       }).eq('id', product.id);
     });
   }

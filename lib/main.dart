@@ -5,7 +5,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/date_symbol_data_local.dart'; 
 
-import 'presentation/dashboard_screen.dart';
+import 'presentation/auth_gate.dart';
 
 
 Future<void> main() async {
@@ -30,6 +30,8 @@ Future<void> main() async {
   );
 }
 
+final _navigatorKey = GlobalKey<NavigatorState>();
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -37,6 +39,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Minimarket POS',
+      navigatorKey: _navigatorKey,
       debugShowCheckedModeBanner: false,
       
       theme: ThemeData(
@@ -84,8 +87,8 @@ class MyApp extends StatelessWidget {
         ),
       ),
 
-      // Pintu Masuk -> Dashboard
-      home: const DashboardScreen(),
+      // Pintu Masuk -> Login / beranda sesuai peran
+      home: AuthGate(navigatorKey: _navigatorKey),
     );
   }
 }

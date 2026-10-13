@@ -1,7 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'profile_model.dart';
+import 'repositories/auth_repository.dart';
 import 'repositories/product_repository.dart';
+import 'repositories/profile_repository.dart';
+import 'repositories/staff_repository.dart';
 import 'repositories/stock_repository.dart';
 import 'repositories/transaction_repository.dart';
 
@@ -17,6 +21,22 @@ final stockRepositoryProvider = Provider<StockRepository>(
 
 final transactionRepositoryProvider = Provider<TransactionRepository>(
   (ref) => SupabaseTransactionRepository(ref.watch(supabaseClientProvider)),
+);
+
+final authRepositoryProvider = Provider<AuthRepository>(
+  (ref) => SupabaseAuthRepository(ref.watch(supabaseClientProvider)),
+);
+
+final profileRepositoryProvider = Provider<ProfileRepository>(
+  (ref) => SupabaseProfileRepository(ref.watch(supabaseClientProvider)),
+);
+
+final staffRepositoryProvider = Provider<StaffRepository>(
+  (ref) => SupabaseStaffRepository(ref.watch(supabaseClientProvider)),
+);
+
+final staffListProvider = FutureProvider.autoDispose<List<Profile>>(
+  (ref) => ref.watch(profileRepositoryProvider).getAllProfiles(),
 );
 
 final categoriesProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>(
