@@ -26,6 +26,9 @@ Aplikasi ini adalah sistem **Point of Sale (POS)** dan **Manajemen Inventaris** 
 - **Language:** [Dart](https://dart.dev/)
 - **Features:** Image Picker & Android Manifest optimized for release.
 
+### 🗄️ Skema Database (`supabase/migrations`)
+Folder `supabase/migrations` berisi skema database dalam bentuk SQL. `0001_baseline.sql` mendokumentasikan tabel yang dipakai aplikasi (`categories`, `products`, `stocks`, `transactions`, `transaction_items`) sesuai kondisi 13 Oktober 2026. File ini tidak dijalankan otomatis; gunakan untuk menyiapkan proyek Supabase baru. Row Level Security (RLS) sengaja belum diaktifkan di baseline dan akan ditambahkan pada migrasi berikutnya.
+
 ### ⚙️ Instalasi & Persiapan
 1. Clone repositori:
    ```bash
