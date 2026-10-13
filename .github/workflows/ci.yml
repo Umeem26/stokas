@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # .env didaftarkan sebagai asset di pubspec; CI cukup file kosong (tanpa secret).
+      - name: Create empty .env
+        run: touch .env
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
