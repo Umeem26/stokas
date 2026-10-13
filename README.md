@@ -26,8 +26,24 @@ Aplikasi ini adalah sistem **Point of Sale (POS)** dan **Manajemen Inventaris** 
 - **Language:** [Dart](https://dart.dev/)
 - **Features:** Image Picker & Android Manifest optimized for release.
 
-### 🗄️ Skema Database (`supabase/migrations`)
-Folder `supabase/migrations` berisi skema database dalam bentuk SQL. `0001_baseline.sql` mendokumentasikan tabel yang dipakai aplikasi (`categories`, `products`, `stocks`, `transactions`, `transaction_items`) sesuai kondisi 13 Oktober 2026. File ini tidak dijalankan otomatis; gunakan untuk menyiapkan proyek Supabase baru. Row Level Security (RLS) sengaja belum diaktifkan di baseline dan akan ditambahkan pada migrasi berikutnya.
+### 🗄️ Folder `supabase/`
+- `migrations/0001_baseline.sql` — skema awal (`categories`, `products`, `stocks`, `transactions`, `transaction_items`) sesuai kondisi 13 Oktober 2026, tanpa RLS.
+- `migrations/0002_auth_roles_rls.sql` — tabel `profiles`, peran (`owner`/`cashier`/`warehouse`), kolom `transactions.cashier_id`, dan RLS di semua tabel.
+- `migrations/0003_storage_policies.sql` — kebijakan akses bucket `product-images`.
+- `functions/staff-admin` — Edge Function untuk owner: tambah staf, reset password, aktif/nonaktifkan akun.
+
+File-file ini adalah dokumentasi dari yang sudah diterapkan ke proyek Supabase; tidak dijalankan otomatis oleh aplikasi maupun CI.
+
+### 🔐 Peran & Login
+Semua pengguna wajib login. Staf login dengan **username** (dipetakan ke email `username@staff.pos.invalid`); owner boleh login dengan email biasa. Sesi tersimpan di perangkat sehingga tidak perlu login ulang setiap membuka aplikasi. Akun yang dinonaktifkan otomatis dikeluarkan.
+
+| Peran | Beranda | Akses |
+|---|---|---|
+| Owner | Dashboard | Semua layar, ubah harga, lihat harga modal, kelola staf |
+| Kasir | Kasir | Kasir, riwayat transaksi sendiri, lihat stok |
+| Gudang | Stok | Tambah/edit/mutasi stok; tidak bisa mengubah harga dan tidak melihat harga modal |
+
+Akun staf dibuat owner dari menu **Staf** di Dashboard. Hak akses di aplikasi hanya menyembunyikan menu; penjagaan sebenarnya ada di RLS database.
 
 ### ⚙️ Instalasi & Persiapan
 1. Clone repositori:

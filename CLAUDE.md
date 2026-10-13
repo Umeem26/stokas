@@ -12,7 +12,12 @@ State management: flutter_riverpod. Kredensial dibaca dari `.env` (SUPABASE_URL,
   Semua panggilan Supabase hanya boleh di sini.
 - `data/providers.dart` — provider repository & data layar (FutureProvider).
 - `presentation/` — layar; `presentation/widgets/error_view.dart` untuk state gagal + "Coba lagi".
-- `supabase/migrations/` — dokumentasi skema SQL (tidak dijalankan otomatis).
+- `supabase/` — migrasi SQL + Edge Function (dokumentasi; jangan dijalankan/deploy dari sini).
+
+## Peran (lib/core/permissions.dart, `can(role, Permission)`)
+- owner: semua + Staf. kasir: Kasir, Riwayat, lihat Stok (beranda Kasir).
+- gudang: Stok tambah/edit/mutasi, tanpa ubah harga & tanpa harga modal (beranda Stok).
+- Login via `AuthGate` + `SessionController` (lib/data/session.dart); akun staf via Edge Function `staff-admin`.
 
 ## Aturan tetap
 - Commit langsung ke `main` dengan pesan jelas (conventional commits).
