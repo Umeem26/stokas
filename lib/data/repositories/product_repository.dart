@@ -4,13 +4,62 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/app_exception.dart';
+import '../../core/format.dart';
 import '../product_model.dart';
+
+/// Isi RPC create_product_with_stock: produk baru + stok awal opsional dalam satu langkah.
+/// [price] > 0 hanya diterima server dari owner; gudang selalu mengirim 0.
+class NewProduct {
+  final String id;
+  final String name;
+  final String unit;
+  final int? categoryId;
+  final num minStock;
+  final int price;
+  final String? imageUrl;
+  final String floor;
+  final num? qty; // null/0 = tanpa stok awal
+  final DateTime? expiry;
+  final String? note;
+
+  const NewProduct({
+    required this.id,
+    required this.name,
+    required this.unit,
+    this.categoryId,
+    this.minStock = 5,
+    this.price = 0,
+    this.imageUrl,
+    required this.floor,
+    this.qty,
+    this.expiry,
+    this.note,
+  });
+
+  Map<String, dynamic> toRpcParams() => {
+        'p_id': id.trim(),
+        'p_name': name.trim(),
+        'p_unit': unit.trim(),
+        'p_category': categoryId,
+        'p_min_stock': minStock,
+        'p_price': price,
+        'p_image_url': imageUrl,
+        'p_floor': floor,
+        'p_qty': (qty ?? 0) > 0 ? qty : null,
+        'p_expiry': expiry == null ? null : formatDateParam(expiry!),
+        'p_note': (note == null || note!.trim().isEmpty) ? null : note!.trim(),
+      };
+}
 
 abstract class ProductRepository {
   Future<List<Map<String, dynamic>>> getCategories();
 
-  /// Simpan produk baru (tanpa stok; stok awal lewat StockRepository.restock).
-  Future<void> addProduct(ProductModel product, {String? imageUrl});
+  /// Semua produk aktif (id, brand_name, unit_type), urut nama; termasuk yang belum punya stok.
+  Future<List<Map<String, dynamic>>> getProducts();
+
+  /// Produk baru lewat RPC create_product_with_stock (tabel products tidak ditulis langsung).
+  /// Jaringan putus = [NetworkException] (hasil belum pasti, jangan ulang otomatis).
+  Future<void> createProductWithStock(NewProduct product);
 
   /// [includePrices] false: harga jual tidak dikirim (peran non-owner).
   Future<void> updateProduct(ProductModel product, {bool includePrices = true});
@@ -42,18 +91,19 @@ class SupabaseProductRepository implements ProductRepository {
   }
 
   @override
-  Future<void> addProduct(ProductModel product, {String? imageUrl}) {
-    return guard('Gagal menyimpan barang', () async {
-      await _client.from('products').insert({
-        'id': product.id,
-        'brand_name': product.brandName,
-        'category_id': product.categoryId,
-        'unit_type': product.unitType,
-        'min_stock': product.minStock,
-        'price': product.price,
-        'image_url': imageUrl,
-      });
+  Future<List<Map<String, dynamic>>> getProducts() {
+    return guard('Gagal memuat daftar barang', () async {
+      final response = await _client.from('products').select('id, brand_name, unit_type').eq('is_deleted', false).order('brand_name');
+      return List<Map<String, dynamic>>.from(response);
     });
+  }
+
+  @override
+  Future<void> createProductWithStock(NewProduct product) {
+    const message = 'Gagal menyimpan barang';
+    return guard(message, () async {
+      await _client.rpc('create_product_with_stock', params: product.toRpcParams());
+    }, map: (e) => mapUncertainWriteError(message, e));
   }
 
   @override

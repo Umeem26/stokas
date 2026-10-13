@@ -84,6 +84,9 @@ class FakeStockRepository implements StockRepository {
   final calls = <String>[];
   int loads = 0;
 
+  /// Galat restock per product_id, dilempar sekali (setelah panggilan dicatat).
+  final restockErrors = <String, Object>{};
+
   FakeStockRepository(this.rows);
 
   static String _d(DateTime? d) => d == null ? '-' : '${d.year}-${d.month}-${d.day}';
@@ -101,7 +104,7 @@ class FakeStockRepository implements StockRepository {
   Map<String, dynamic> _upsert(String productId, String floor, DateTime? expiry) {
     final existing = _find(productId, floor, expiry);
     if (existing != null) return existing;
-    final template = rows.firstWhere((r) => r['product_id'] == productId);
+    final template = rows.firstWhere((r) => r['product_id'] == productId, orElse: () => {'product_id': productId});
     final row = {
       ...template,
       'id': rows.length + 1,
@@ -122,6 +125,8 @@ class FakeStockRepository implements StockRepository {
   @override
   Future<void> restock({required String productId, required String floor, DateTime? expiry, required num qty, String? note}) async {
     calls.add('restock $productId $floor ${_d(expiry)} $qty ${note ?? ''}'.trim());
+    final error = restockErrors.remove(productId);
+    if (error != null) throw error;
     final row = _upsert(productId, floor, expiry);
     row['quantity'] = (row['quantity'] as num) + qty;
   }
@@ -143,12 +148,17 @@ class FakeStockRepository implements StockRepository {
   }
 }
 
-/// Repository produk palsu: mencatat insert, harga modal (product_costs), dan soft delete.
+/// Repository produk palsu: meniru RPC create_product_with_stock (kode ganda ditolak),
+/// mencatat harga modal (product_costs) dan soft delete. [nextError] dilempar sekali.
 class FakeProductRepository implements ProductRepository {
-  final added = <ProductModel>[];
+  final List<Map<String, dynamic>> products;
+  final created = <NewProduct>[];
+  Object? nextError;
   final capitalPrices = <String, int>{};
   final deleted = <String>[];
   int capitalReads = 0;
+
+  FakeProductRepository([List<Map<String, dynamic>>? products]) : products = products ?? [];
 
   @override
   Future<List<Map<String, dynamic>>> getCategories() async => [
@@ -156,7 +166,19 @@ class FakeProductRepository implements ProductRepository {
       ];
 
   @override
-  Future<void> addProduct(ProductModel product, {String? imageUrl}) async => added.add(product);
+  Future<List<Map<String, dynamic>>> getProducts() async => [for (final p in products) {...p}];
+
+  @override
+  Future<void> createProductWithStock(NewProduct product) async {
+    created.add(product);
+    final error = nextError;
+    if (error != null) {
+      nextError = null;
+      throw error;
+    }
+    if (products.any((p) => p['id'] == product.id.trim())) throw const AppException('Kode barang sudah dipakai');
+    products.add({'id': product.id.trim(), 'brand_name': product.name.trim(), 'unit_type': product.unit});
+  }
 
   @override
   Future<void> updateProduct(ProductModel product, {bool includePrices = true}) async {}

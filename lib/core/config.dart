@@ -14,5 +14,8 @@ String usernameToEmail(String input) {
 /// Lokasi stok yang dipakai di form barang, mutasi, stok masuk, dan opname.
 const storeFloors = ['Lantai 1', 'Lantai 2'];
 
+/// Pilihan satuan barang di form produk.
+const productUnits = ['pcs', 'gram', 'liter', 'ml'];
+
 /// Nama toko di kepala struk PDF.
 const storeName = 'Toko';

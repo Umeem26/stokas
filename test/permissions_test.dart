@@ -4,7 +4,7 @@ import 'package:minimarket_pos/core/permissions.dart';
 void main() {
   // Matriks lengkap: setiap peran x setiap izin.
   const expected = {
-    AppRole.cashier: {Permission.useCashier, Permission.viewHistory, Permission.viewStock},
+    AppRole.cashier: {Permission.useCashier, Permission.viewHistory, Permission.viewStock, Permission.viewPrices},
     AppRole.warehouse: {
       Permission.viewStock,
       Permission.addProduct,
@@ -36,7 +36,7 @@ void main() {
   });
 
   test('gudang tidak bisa ubah harga, tidak melihat harga modal, tanpa kasir/riwayat', () {
-    for (final p in [Permission.editPrices, Permission.viewCapitalPrice, Permission.useCashier, Permission.viewHistory, Permission.manageStaff]) {
+    for (final p in [Permission.viewPrices, Permission.editPrices, Permission.viewCapitalPrice, Permission.useCashier, Permission.viewHistory, Permission.manageStaff]) {
       expect(can(AppRole.warehouse, p), isFalse, reason: p.name);
     }
   });

@@ -45,6 +45,11 @@ final categoriesProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>
   (ref) => ref.watch(productRepositoryProvider).getCategories(),
 );
 
+/// Produk aktif untuk scan/cari di layar Terima.
+final productListProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>(
+  (ref) => ref.watch(productRepositoryProvider).getProducts(),
+);
+
 final stockListProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>(
   (ref) => ref.watch(stockRepositoryProvider).getStockList(),
 );

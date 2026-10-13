@@ -9,7 +9,8 @@ abstract class StockRepository {
   /// Daftar batch stok beserta produk dan kategorinya (produk terhapus tidak ikut).
   Future<List<Map<String, dynamic>>> getStockList();
 
-  /// Stok masuk: tambah [qty] ke batch (produk, lantai, kedaluwarsa).
+  /// Stok masuk: tambah [qty] ke batch (produk, lantai, kedaluwarsa). Satu batch per panggilan,
+  /// tanpa kunci idempotensi: jaringan putus = [NetworkException], jangan ulang otomatis.
   Future<void> restock({required String productId, required String floor, DateTime? expiry, required num qty, String? note});
 
   /// Opname: set batch menjadi hasil hitung fisik [counted].
@@ -40,7 +41,8 @@ class SupabaseStockRepository implements StockRepository {
 
   @override
   Future<void> restock({required String productId, required String floor, DateTime? expiry, required num qty, String? note}) {
-    return guard('Gagal menyimpan stok masuk', () async {
+    const message = 'Gagal menyimpan stok masuk';
+    return guard(message, () async {
       await _client.rpc('restock', params: {
         'p_product': productId,
         'p_floor': floor,
@@ -48,7 +50,7 @@ class SupabaseStockRepository implements StockRepository {
         'p_qty': qty,
         'p_note': _note(note),
       });
-    });
+    }, map: (e) => mapUncertainWriteError(message, e));
   }
 
   @override

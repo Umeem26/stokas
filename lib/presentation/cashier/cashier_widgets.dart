@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/format.dart';
 import '../../data/checkout_controller.dart';
+import '../../data/scan_match.dart';
 import '../../data/stock_availability.dart';
 import '../../data/transaction_model.dart';
 import '../design/money_text.dart';
@@ -12,20 +13,9 @@ import '../design/stokas_tokens.dart';
 /// Lebar panel keranjang di tata letak dua panel.
 const double cartPanelWidth = 408;
 
-/// Cocokkan ketikan/scan: `products.id` persis dulu, lalu nama persis (abaikan huruf besar),
-/// lalu nama yang mengandung kata kunci bila hanya satu. Null bila tidak ada atau lebih dari satu.
-SellableProduct? findScanMatch(List<SellableProduct> products, String query) {
-  final q = query.trim();
-  if (q.isEmpty) return null;
-  for (final p in products) {
-    if (p.id == q) return p;
-  }
-  final k = q.toLowerCase();
-  final exact = products.where((p) => p.name.toLowerCase() == k).toList();
-  if (exact.length == 1) return exact.single;
-  final partial = products.where((p) => p.name.toLowerCase().contains(k)).toList();
-  return partial.length == 1 ? partial.single : null;
-}
+/// Cocokkan ketikan/scan ([matchScan]). Null bila tidak ada atau lebih dari satu.
+SellableProduct? findScanMatch(List<SellableProduct> products, String query) =>
+    matchScan(products, query, id: (p) => p.id, name: (p) => p.name).match;
 
 /// Lencana stok kartu produk: Habis (0), Menipis (<= min_stock), Stok aman.
 (StockStatus, String) productStockStatus(SellableProduct p) {

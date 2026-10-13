@@ -9,6 +9,7 @@ import 'design/stokas_tokens.dart';
 import 'history_screen.dart';
 import 'staff_screen.dart';
 import 'stock_list_screen.dart';
+import 'warehouse/receive_screen.dart';
 import 'widgets/account_menu_button.dart';
 import 'widgets/segera_hadir_view.dart';
 
@@ -44,12 +45,14 @@ enum AppTab {
       case AppTab.riwayat:
         return const HistoryScreen();
       case AppTab.stok:
-      case AppTab.produk: // Daftar barang + tambah/edit/mutasi sampai form gudang terpisah
         return const StockListScreen();
+      case AppTab.produk:
+        return const StockListScreen(title: 'Produk');
       case AppTab.staf:
         return const StaffScreen();
-      case AppTab.home:
       case AppTab.terima:
+        return const ReceiveScreen();
+      case AppTab.home:
       case AppTab.opname:
       case AppTab.pindah:
         return SegeraHadirView(title: label);

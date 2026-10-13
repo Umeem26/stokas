@@ -26,6 +26,7 @@ enum Permission {
   moveStock,
   restockStock, // Stok masuk (RPC restock)
   countStock, // Opname (RPC stock_count)
+  viewPrices, // Harga jual di daftar stok (gudang tidak melihat harga)
   editPrices,
   viewCapitalPrice,
   manageStaff,
@@ -35,6 +36,7 @@ const _cashierPermissions = {
   Permission.useCashier,
   Permission.viewHistory,
   Permission.viewStock,
+  Permission.viewPrices,
 };
 
 const _warehousePermissions = {

@@ -11,6 +11,7 @@ import 'package:minimarket_pos/presentation/cashier_screen.dart';
 import 'package:minimarket_pos/presentation/history_screen.dart';
 import 'package:minimarket_pos/presentation/login_screen.dart';
 import 'package:minimarket_pos/presentation/stock_list_screen.dart';
+import 'package:minimarket_pos/presentation/warehouse/receive_screen.dart';
 import 'package:minimarket_pos/presentation/widgets/segera_hadir_view.dart';
 
 import 'fakes.dart';
@@ -42,6 +43,7 @@ Future<FakeAuthRepository> pumpGate(WidgetTester tester, String? userId, {String
       authRepositoryProvider.overrideWithValue(auth),
       profileRepositoryProvider.overrideWithValue(_profiles),
       stockRepositoryProvider.overrideWithValue(FakeStockRepository([row(1, 'A', 5)])),
+      productRepositoryProvider.overrideWithValue(FakeProductRepository()),
       transactionRepositoryProvider.overrideWithValue(FakeTransactionRepository()),
       clockProvider.overrideWithValue(() => DateTime.utc(2026, 10, 13, 3)),
     ],
@@ -99,7 +101,7 @@ void main() {
           expect(find.widgetWithText(SegeraHadirView, 'Segera hadir'), findsOneWidget);
           expect(tester.widget<SegeraHadirView>(find.byType(SegeraHadirView)).title, 'Home');
         case 'gudang':
-          expect(tester.widget<SegeraHadirView>(find.byType(SegeraHadirView)).title, 'Terima');
+          expect(find.byType(ReceiveScreen), findsOneWidget);
       }
     });
   }

@@ -6,10 +6,11 @@ import 'package:image_picker/image_picker.dart'; // Plugin Foto
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/config.dart';
 import '../core/format.dart';
-import '../data/product_model.dart';
+import '../data/repositories/product_repository.dart';
 import '../core/permissions.dart';
 import '../data/providers.dart';
 import '../data/session.dart';
+import 'design/stokas_button.dart';
 import 'design/stokas_tokens.dart';
 
 class AddProductScreen extends ConsumerStatefulWidget {
@@ -86,6 +87,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       setState(() => _isUploading = true); // Mulai Loading
 
       final service = ref.read(productRepositoryProvider);
+      final role = ref.read(currentRoleProvider);
       try {
         String? imageUrl;
         
@@ -94,53 +96,42 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           imageUrl = await service.uploadImage(_imageFile!);
         }
 
-        // Non-owner tidak mengisi harga; harga jual 0 sampai diisi owner.
-        final canEditPrices = can(ref.read(currentRoleProvider), Permission.editPrices);
-
-        final product = ProductModel(
-          id: _idController.text,
-          brandName: _nameController.text,
+        // 2. Produk + stok awal dalam satu RPC (create_product_with_stock).
+        //    Non-owner tidak mengisi harga; harga jual 0 sampai diisi owner.
+        final id = _idController.text.trim();
+        await service.createProductWithStock(NewProduct(
+          id: id,
+          name: _nameController.text,
+          unit: _selectedUnit,
           categoryId: int.parse(_selectedCategory!),
-          unitType: _selectedUnit,
-          minStock: double.parse(_minStockController.text),
-          price: canEditPrices ? parseRupiah(_priceController.text) : 0,
-        );
-
-        // 2. Simpan Data Produk (termasuk URL foto)
-        await service.addProduct(product, imageUrl: imageUrl);
+          minStock: num.parse(_minStockController.text),
+          price: can(role, Permission.editPrices) ? parseRupiah(_priceController.text) : 0,
+          imageUrl: imageUrl,
+          floor: _selectedFloor,
+          qty: num.parse(_qtyController.text),
+          expiry: _selectedExpiry,
+        ));
 
         // 3. Harga modal ke product_costs (khusus owner)
-        if (can(ref.read(currentRoleProvider), Permission.viewCapitalPrice)) {
-          await service.saveCapitalPrice(product.id, parseRupiah(_capitalPriceController.text));
-        }
-
-        // 4. Stok awal lewat RPC restock
-        final initialQty = num.parse(_qtyController.text);
-        if (initialQty > 0) {
-          await ref.read(stockRepositoryProvider).restock(
-                productId: product.id,
-                floor: _selectedFloor,
-                expiry: _selectedExpiry,
-                qty: initialQty,
-                note: 'Stok awal',
-              );
+        if (can(role, Permission.viewCapitalPrice)) {
+          await service.saveCapitalPrice(id, parseRupiah(_capitalPriceController.text));
         }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("✅ Barang & Foto Berhasil Disimpan!")),
+            const SnackBar(content: Text("Barang tersimpan")),
           );
-          Navigator.pop(context);
+          Navigator.pop(context, true);
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e"), backgroundColor: context.stokas.negative));
         }
       } finally {
         if (mounted) setState(() => _isUploading = false); // Stop Loading
       }
     } else if (_selectedCategory == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("⚠️ Pilih Kategori dulu!")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pilih kategori dulu.")));
     }
   }
 
@@ -168,20 +159,20 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                         width: 120,
                         height: 120,
                         decoration: BoxDecoration(
-                          color: Colors.grey[200],
+                          color: context.stokas.surfaceSunken,
                           borderRadius: BorderRadius.circular(15),
-                          border: Border.all(color: Colors.grey.shade400),
+                          border: Border.all(color: context.stokas.lineStrong),
                           image: _imageFile != null 
                             ? DecorationImage(image: FileImage(_imageFile!), fit: BoxFit.cover)
                             : null
                         ),
                         child: _imageFile == null 
-                          ? const Column(
+                          ? Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.add_a_photo, size: 40, color: Colors.grey),
-                                SizedBox(height: 5),
-                                Text("Tambah Foto", style: TextStyle(color: Colors.grey, fontSize: 12))
+                                Icon(Icons.add_a_photo, size: 40, color: context.stokas.inkMuted),
+                                const SizedBox(height: 5),
+                                Text("Tambah Foto", style: StokasType.caption.copyWith(color: context.stokas.inkMuted))
                               ],
                             ) 
                           : null,
@@ -215,7 +206,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       ],
                     )
                   else
-                    const Text("Harga jual & harga modal diisi oleh owner.", style: TextStyle(color: Colors.grey)),
+                    Text("Harga jual & harga modal diisi oleh owner.", style: StokasType.body.copyWith(color: context.stokas.inkMuted)),
                   const Divider(height: 40, thickness: 1),
 
                   Row(
@@ -232,15 +223,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                   _buildDatePicker(),
                   
                   const SizedBox(height: 30),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800]),
-                      onPressed: _saveProduct,
-                      child: const Text("SIMPAN DATA", style: TextStyle(fontSize: 16, color: Colors.white)),
-                    ),
-                  ),
+                  StokasButton(label: "Simpan", icon: Icons.save_outlined, expand: true, onPressed: _saveProduct),
                 ],
               ),
             ),
@@ -262,7 +245,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           : (isNumber ? [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))] : null),
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: Icon(icon, color: Colors.blue[700]),
+        prefixIcon: Icon(icon, color: context.stokas.primary),
         suffixText: isCurrency ? "IDR" : null,
       ),
       validator: (v) => v!.isEmpty ? "Wajib diisi" : null,
@@ -294,7 +277,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     return DropdownButtonFormField<String>(
       decoration: const InputDecoration(labelText: "Satuan"),
       initialValue: _selectedUnit,
-      items: ['pcs', 'gram', 'liter', 'ml'].map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
+      items: productUnits.map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
       onChanged: (v) => setState(() => _selectedUnit = v!),
     );
   }
@@ -322,12 +305,12 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: "Tanggal Kadaluarsa (Opsional)",
-          prefixIcon: Icon(Icons.calendar_today, color: Colors.blue[700]),
+          prefixIcon: Icon(Icons.calendar_today, color: context.stokas.primary),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         ),
         child: Text(
           _selectedExpiry == null ? "-" : DateFormat('dd MMM yyyy').format(_selectedExpiry!),
-          style: TextStyle(color: _selectedExpiry == null ? Colors.grey : context.stokas.ink),
+          style: TextStyle(color: _selectedExpiry == null ? context.stokas.inkMuted : context.stokas.ink),
         ),
       ),
     );

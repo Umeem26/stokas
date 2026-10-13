@@ -30,6 +30,10 @@ class NetworkException extends AppException {
 
 const checkoutOfflineMessage = 'Tidak ada koneksi. Keranjang aman, coba lagi.';
 
+/// RPC tulis tanpa kunci idempotensi (restock, create_product_with_stock): bila jaringan
+/// putus, hasilnya tidak diketahui, jadi tidak boleh diulang otomatis.
+const uncertainSaveMessage = 'Belum pasti tersimpan. Cek tab Produk sebelum mengulang.';
+
 /// Error dari lapisan HTTP/soket (bukan jawaban server). Dicek lewat nama tipe dan teks
 /// karena SocketException (dart:io) dan ClientException (http) tidak tersedia di semua platform.
 bool isNetworkError(Object error) {
@@ -50,6 +54,10 @@ AppException mapError(String message, Object error) {
   }
   return AppException(message, error);
 }
+
+/// Seperti [mapError], tetapi galat jaringan menjadi [NetworkException] berpesan [uncertainSaveMessage].
+AppException mapUncertainWriteError(String message, Object error) =>
+    isNetworkError(error) ? NetworkException(uncertainSaveMessage, error) : mapError(message, error);
 
 /// Seperti [mapError], ditambah "Stok tidak cukup" (P0001 + hint product_id) dari RPC checkout
 /// dan [NetworkException] bila server tidak terjangkau.

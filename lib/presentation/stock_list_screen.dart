@@ -6,14 +6,23 @@ import '../data/providers.dart';
 import '../data/session.dart';
 import '../data/stock_availability.dart';
 import 'add_product_screen.dart';
+import 'design/money_text.dart';
+import 'design/status_badge.dart';
+import 'design/stokas_button.dart';
+import 'design/stokas_tokens.dart';
 import 'mutation_screen.dart';
 import 'edit_product_screen.dart';
+import 'warehouse/new_product_screen.dart';
 import 'widgets/account_menu_button.dart';
 import 'widgets/error_view.dart';
 import 'widgets/stock_adjust_dialog.dart';
 
+/// Daftar batch stok. Harga jual hanya untuk peran [Permission.viewPrices] (gudang tidak).
+/// "Produk baru": owner ke form lengkap (harga, modal, foto); gudang ke [NewProductScreen] tanpa harga.
 class StockListScreen extends ConsumerStatefulWidget {
-  const StockListScreen({super.key});
+  final String title;
+
+  const StockListScreen({super.key, this.title = 'Stok Toko (Real-time)'});
 
   @override
   ConsumerState<StockListScreen> createState() => _StockListScreenState();
@@ -27,197 +36,182 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
     if (saved == true) _refresh();
   }
 
+  Future<void> _open(Widget screen) async {
+    final changed = await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+    if (changed == true) {
+      _refresh();
+      ref.invalidate(productListProvider);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final c = context.stokas;
     final role = ref.watch(currentRoleProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text("Stok Toko (Real-time)"),
-        actions: [
-          const AccountMenuButton(),
-          const SizedBox(width: 10),
-        ],
-      ),
+      backgroundColor: c.canvas,
+      appBar: AppBar(title: Text(widget.title), actions: const [AccountMenuButton(), SizedBox(width: StokasSpace.s2)]),
       body: ref.watch(stockListProvider).when(
-        skipLoadingOnRefresh: false,
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => ErrorView(error: error, onRetry: _refresh),
-        data: (stocks) {
-          if (stocks.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.inventory_2_outlined, size: 80, color: Colors.grey),
-                  SizedBox(height: 10),
-                  Text("Belum ada stok barang.", style: TextStyle(fontSize: 18, color: Colors.grey)),
-                ],
-              ),
-            );
-          }
-
-          final now = ref.read(clockProvider)();
-          return ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: stocks.length,
-            itemBuilder: (context, index) {
-              final stock = stocks[index];
-              final product = stock['products'];
-              final price = (product['price'] as num?)?.round() ?? 0; // Ambil harga
-              final expired = isBatchExpired(stock, now);
-              
-              return Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Row(
+            skipLoadingOnRefresh: false,
+            loading: () => const _StockSkeleton(),
+            error: (error, _) => ErrorView(error: error, onRetry: _refresh),
+            data: (stocks) {
+              if (stocks.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // 1. FOTO PRODUK (Ganti Bagian Ikon Lama dengan ini)
-                      Container(
-                        width: 60, height: 60, // Ukuran Kotak Foto
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          image: (product['image_url'] != null && product['image_url'].toString().isNotEmpty)
-                              ? DecorationImage(
-                                  image: NetworkImage(product['image_url']), // Load dari Supabase
-                                  fit: BoxFit.cover,
-                                )
-                              : null,
-                        ),
-                        child: (product['image_url'] == null || product['image_url'].toString().isEmpty)
-                            ? Icon(Icons.shopping_bag, color: Theme.of(context).primaryColor, size: 30) // Fallback Icon
-                            : null, // Kalau ada foto, child-nya null
-                      ),
-                      const SizedBox(width: 15),
-                      
-                      // 2. Info Barang & Harga
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              product['brand_name'],
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                            const SizedBox(height: 4),
-                            
-                            // TAMPILKAN HARGA DISINI
-                            Text(
-                              formatRupiah(price),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold, 
-                                color: Colors.green, // Warna hijau uang
-                                fontSize: 14
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-
-                            Text("Lokasi: ${stock['floor_name']}", style: TextStyle(color: Colors.grey[700], fontSize: 12)),
-                            if (stock['expiry_date'] != null)
-                               Text("Exp: ${stock['expiry_date'].substring(0, 10)}", 
-                                   style: const TextStyle(color: Colors.red, fontSize: 11)),
-                            // Batch kedaluwarsa tidak dihitung sebagai stok tersedia di Kasir
-                            if (expired)
-                              Container(
-                                margin: const EdgeInsets.only(top: 4),
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(10)),
-                                child: const Text("Kedaluwarsa", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                              ),
-                          ],
-                        ),
-                      ),
-                      
-                      // 3. Stok & Tombol Mutasi
-                      Row(
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                formatQty(stock['quantity'] as num),
-                                style: TextStyle(
-                                  fontSize: 18, 
-                                  fontWeight: FontWeight.bold, 
-                                  color: Theme.of(context).primaryColor
-                                ),
-                              ),
-                              Text(product['unit_type'], style: const TextStyle(fontSize: 12)),
-                            ],
-                          ),
-                          const SizedBox(width: 5),
-                          
-                          // Tombol Mutasi
-                          // --- TOMBOL MUTASI (PINDAH) ---
-                          if (can(role, Permission.moveStock))
-                          IconButton(
-                            icon: const Icon(Icons.swap_horiz, color: Color(0xFFEF6C00), size: 30),
-                            tooltip: "Pindah Lantai",
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (context) => MutationScreen(sourceStock: stock)),
-                              ).then((value) { if (value == true) _refresh(); });
-                            },
-                          ),
-                          
-                          // --- STOK MASUK & OPNAME ---
-                          if (can(role, Permission.restockStock) || can(role, Permission.countStock))
-                          PopupMenuButton<StockAdjustMode>(
-                            icon: const Icon(Icons.more_vert, color: Colors.grey),
-                            tooltip: "Stok Masuk / Opname",
-                            onSelected: (mode) => _adjust(stock, mode),
-                            itemBuilder: (context) => [
-                              if (can(role, Permission.restockStock))
-                                const PopupMenuItem(
-                                  value: StockAdjustMode.restock,
-                                  child: ListTile(leading: Icon(Icons.add_box), title: Text("Stok Masuk")),
-                                ),
-                              if (can(role, Permission.countStock))
-                                const PopupMenuItem(
-                                  value: StockAdjustMode.opname,
-                                  child: ListTile(leading: Icon(Icons.fact_check), title: Text("Opname")),
-                                ),
-                            ],
-                          ),
-
-                          // --- TOMBOL EDIT (BARU) ---
-                          if (can(role, Permission.editProduct))
-                          IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.grey),
-                            tooltip: "Edit Barang",
-                            onPressed: () {
-                              // Kirim Data PRODUK (bukan stok) ke halaman edit
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => EditProductScreen(productData: product),
-                                ),
-                              ).then((value) {
-                                // Refresh jika ada perubahan (Update/Hapus)
-                                if (value == true) _refresh();
-                              });
-                            },
-                          ),
-                        ],
-                      ),
+                      Icon(Icons.inventory_2_outlined, size: StokasSpace.s8, color: c.inkMuted),
+                      const SizedBox(height: StokasSpace.s3),
+                      Text('Belum ada stok. Terima barang dulu.', style: StokasType.bodyLg.copyWith(color: c.inkMuted)),
                     ],
                   ),
+                );
+              }
+              final now = ref.read(clockProvider)();
+              return ListView.separated(
+                padding: const EdgeInsets.fromLTRB(StokasSpace.s3, StokasSpace.s3, StokasSpace.s3, StokasSpace.s8 + StokasSpace.s8),
+                itemCount: stocks.length,
+                separatorBuilder: (_, _) => const SizedBox(height: StokasSpace.s2),
+                itemBuilder: (context, index) => _StockTile(
+                  stock: stocks[index],
+                  expired: isBatchExpired(stocks[index], now),
+                  role: role,
+                  onMove: () => _open(MutationScreen(sourceStock: stocks[index])),
+                  onAdjust: (mode) => _adjust(stocks[index], mode),
+                  onEdit: () => _open(EditProductScreen(productData: stocks[index]['products'])),
                 ),
               );
             },
-          );
-        },
+          ),
+      floatingActionButton: !can(role, Permission.addProduct)
+          ? null
+          : StokasButton(
+              key: const Key('stock-new-product'),
+              label: 'Produk baru',
+              icon: Icons.add,
+              onPressed: () => _open(can(role, Permission.editPrices) ? const AddProductScreen() : const NewProductScreen()),
+            ),
+    );
+  }
+}
+
+class _StockTile extends StatelessWidget {
+  final Map<String, dynamic> stock;
+  final bool expired;
+  final AppRole? role;
+  final VoidCallback onMove;
+  final ValueChanged<StockAdjustMode> onAdjust;
+  final VoidCallback onEdit;
+
+  const _StockTile({
+    required this.stock,
+    required this.expired,
+    required this.role,
+    required this.onMove,
+    required this.onAdjust,
+    required this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.stokas;
+    final product = stock['products'] as Map<String, dynamic>;
+    final imageUrl = product['image_url']?.toString() ?? '';
+    final expiry = stock['expiry_date'] as String?;
+
+    return Container(
+      padding: const EdgeInsets.all(StokasSpace.s3),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(StokasRadius.lg),
+        border: Border.all(color: c.line),
       ),
-      floatingActionButton: !can(role, Permission.addProduct) ? null : FloatingActionButton.extended(
-        backgroundColor: Theme.of(context).colorScheme.secondary,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text("Tambah Barang", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const AddProductScreen()),
-          ).then((value) => _refresh());
-        },
+      child: Row(
+        children: [
+          Container(
+            width: StokasSpace.s8 + StokasSpace.s3,
+            height: StokasSpace.s8 + StokasSpace.s3,
+            decoration: BoxDecoration(
+              color: c.surfaceSunken,
+              borderRadius: BorderRadius.circular(StokasRadius.md),
+              image: imageUrl.isEmpty ? null : DecorationImage(image: NetworkImage(imageUrl), fit: BoxFit.cover),
+            ),
+            child: imageUrl.isEmpty ? Icon(Icons.inventory_2_outlined, color: c.stock) : null,
+          ),
+          const SizedBox(width: StokasSpace.s3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${product['brand_name']}', style: StokasType.title.copyWith(color: c.ink)),
+                if (can(role, Permission.viewPrices))
+                  MoneyText((product['price'] as num?)?.round() ?? 0, style: StokasType.body.copyWith(color: c.ink)),
+                Text(
+                  [
+                    '${stock['floor_name']}',
+                    if (expiry != null) 'Exp ${expiry.substring(0, 10)}',
+                  ].join(' · '),
+                  style: StokasType.caption.copyWith(color: c.inkMuted),
+                ),
+                // Batch kedaluwarsa tidak dihitung sebagai stok tersedia di Kasir
+                if (expired)
+                  const Padding(
+                    padding: EdgeInsets.only(top: StokasSpace.s1),
+                    child: StatusBadge(StockStatus.bahaya),
+                  ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(formatQty(stock['quantity'] as num), style: StokasType.titleLg.copyWith(color: c.ink)),
+              Text('${product['unit_type']}', style: StokasType.caption.copyWith(color: c.inkMuted)),
+            ],
+          ),
+          if (can(role, Permission.moveStock))
+            IconButton(icon: Icon(Icons.swap_horiz, color: c.stock), tooltip: 'Pindah Lantai', onPressed: onMove),
+          if (can(role, Permission.restockStock) || can(role, Permission.countStock))
+            PopupMenuButton<StockAdjustMode>(
+              icon: Icon(Icons.more_vert, color: c.inkMuted),
+              tooltip: 'Stok Masuk / Opname',
+              onSelected: onAdjust,
+              itemBuilder: (context) => [
+                if (can(role, Permission.restockStock))
+                  const PopupMenuItem(
+                    value: StockAdjustMode.restock,
+                    child: ListTile(leading: Icon(Icons.add_box_outlined), title: Text('Stok Masuk')),
+                  ),
+                if (can(role, Permission.countStock))
+                  const PopupMenuItem(
+                    value: StockAdjustMode.opname,
+                    child: ListTile(leading: Icon(Icons.fact_check_outlined), title: Text('Opname')),
+                  ),
+              ],
+            ),
+          if (can(role, Permission.editProduct))
+            IconButton(icon: Icon(Icons.edit_outlined, color: c.inkMuted), tooltip: 'Edit Barang', onPressed: onEdit),
+        ],
+      ),
+    );
+  }
+}
+
+/// Kerangka saat memuat (bukan spinner layar penuh).
+class _StockSkeleton extends StatelessWidget {
+  const _StockSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.stokas;
+    return ListView.separated(
+      padding: const EdgeInsets.all(StokasSpace.s3),
+      itemCount: 6,
+      separatorBuilder: (_, _) => const SizedBox(height: StokasSpace.s2),
+      itemBuilder: (_, _) => Container(
+        height: StokasSpace.s8 + StokasSpace.s6,
+        decoration: BoxDecoration(color: c.surfaceSunken, borderRadius: BorderRadius.circular(StokasRadius.lg)),
       ),
     );
   }
