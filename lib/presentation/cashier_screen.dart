@@ -15,6 +15,7 @@ import 'history_screen.dart';
 import 'stock_list_screen.dart';
 import 'widgets/account_menu_button.dart';
 import 'widgets/error_view.dart';
+import 'design/stokas_tokens.dart';
 
 class CashierScreen extends ConsumerStatefulWidget {
   const CashierScreen({super.key});
@@ -121,7 +122,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => Dialog(
-        backgroundColor: Colors.white,
+        backgroundColor: context.stokas.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         child: Container(
           padding: const EdgeInsets.all(20),
@@ -138,7 +139,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
               Text(DateFormat('dd-MM-yyyy HH:mm').format(transaction.createdAt.toLocal()), style: const TextStyle(color: Colors.grey, fontSize: 12)),
               Text("NO. NOTA: #${transaction.id}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
 
-              const Divider(thickness: 2, height: 30, color: Colors.black),
+              Divider(thickness: 2, height: 30, color: context.stokas.ink),
 
               // Isi nota dari server (nama & harga snapshot transaksi)
               Flexible(
@@ -173,7 +174,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                 ),
               ),
 
-              const Divider(thickness: 2, height: 30, color: Colors.black),
+              Divider(thickness: 2, height: 30, color: context.stokas.ink),
 
               _buildReceiptRow("TOTAL", transaction.totalAmount, isBold: true),
               _buildReceiptRow("BAYAR", transaction.paidAmount),
@@ -210,7 +211,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
           Text(formatRupiah(value), style: TextStyle(
             fontWeight: isBold ? FontWeight.bold : FontWeight.normal, 
             fontSize: isBold ? 14 : 12,
-            color: color ?? Colors.black
+            color: color ?? context.stokas.ink
           )),
         ],
       ),
@@ -274,7 +275,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
                 final floors = item.floors.isEmpty ? "-" : item.floors.join(", ");
 
                 return ListTile(
-                  tileColor: Colors.white,
+                  tileColor: context.stokas.surface,
                   leading: const Icon(Icons.local_offer, color: Colors.blue),
                   title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text("$floors - Stok: ${formatQty(item.available)}"),
@@ -291,7 +292,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
           Expanded(
             flex: 3,
             child: Container(
-              color: Colors.blue.shade50,
+              color: context.stokas.surfaceSunken,
               child: Column(
                 children: [
                   const Padding(
@@ -334,7 +335,7 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.stokas.surface,
               boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, -5))],
             ),
             child: Column(

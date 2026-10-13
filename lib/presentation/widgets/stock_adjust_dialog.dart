@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../core/config.dart';
 import '../../core/format.dart';
 import '../../data/providers.dart';
+import '../design/stokas_tokens.dart';
 
 enum StockAdjustMode { restock, opname }
 
@@ -130,7 +131,7 @@ class _StockAdjustDialogState extends ConsumerState<StockAdjustDialog> {
                   ),
                   child: Text(
                     _expiry == null ? "-" : DateFormat('dd MMM yyyy').format(_expiry!),
-                    style: TextStyle(color: _expiry == null ? Colors.grey : Colors.black87),
+                    style: TextStyle(color: _expiry == null ? context.stokas.inkMuted : context.stokas.ink),
                   ),
                 ),
               ),

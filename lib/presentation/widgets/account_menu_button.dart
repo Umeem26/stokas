@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/session.dart';
+import '../design/stokas_tokens.dart';
 
 /// Tombol akun di AppBar: nama + peran, dan Keluar dengan konfirmasi.
 class AccountMenuButton extends ConsumerWidget {
@@ -47,7 +48,7 @@ class AccountMenuButton extends ConsumerWidget {
           child: ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.person),
-            title: Text(profile.fullName.isEmpty ? "-" : profile.fullName, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+            title: Text(profile.fullName.isEmpty ? "-" : profile.fullName, style: TextStyle(fontWeight: FontWeight.bold, color: context.stokas.ink)),
             subtitle: Text(profile.role?.label ?? "-"),
           ),
         ),

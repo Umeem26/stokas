@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/date_symbol_data_local.dart'; 
 
 import 'presentation/auth_gate.dart';
+import 'presentation/design/stokas_theme.dart';
 
 
 Future<void> main() async {
@@ -38,54 +38,14 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Minimarket POS',
+      title: 'Stokas',
       navigatorKey: _navigatorKey,
       debugShowCheckedModeBanner: false,
-      
-      theme: ThemeData(
-        useMaterial3: true, 
-        brightness: Brightness.light,
-        primaryColor: const Color(0xFF1565C0), 
-        scaffoldBackgroundColor: const Color(0xFFF8F9FA), 
-        
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1565C0),
-          brightness: Brightness.light,
-          secondary: const Color(0xFFEF6C00), 
-        ),
 
-        textTheme: GoogleFonts.poppinsTextTheme(),
-
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF1565C0),
-          foregroundColor: Colors.white,
-          elevation: 0,
-          centerTitle: true,
-          titleTextStyle: TextStyle( 
-            fontFamily: 'Poppins', 
-            fontSize: 20, 
-            fontWeight: FontWeight.w600,
-            color: Colors.white
-          ),
-        ),
-
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12), 
-            borderSide: const BorderSide(color: Colors.grey),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.grey.shade300),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFF1565C0), width: 2),
-          ),
-        ),
-      ),
+      // Tema Stokas (docs/brand/tokens.json), terang/gelap mengikuti sistem
+      theme: StokasTheme.light,
+      darkTheme: StokasTheme.dark,
+      themeMode: ThemeMode.system,
 
       // Pintu Masuk -> Login / beranda sesuai peran
       home: AuthGate(navigatorKey: _navigatorKey),

@@ -13,6 +13,7 @@ import 'history_screen.dart';
 import 'staff_screen.dart';
 import 'widgets/account_menu_button.dart';
 import 'widgets/error_view.dart';
+import 'design/stokas_tokens.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -29,7 +30,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget build(BuildContext context) {
     final summary = ref.watch(dashboardSummaryProvider);
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: context.stokas.canvas,
       appBar: AppBar(
         title: Text("Dashboard Admin", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
         elevation: 0,
@@ -61,7 +62,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 // Sapaan
                 Text(
                   "Halo, Selamat Bekerja! 👋", 
-                  style: GoogleFonts.poppins(fontSize: 16, color: Colors.grey[600]),
+                  style: GoogleFonts.poppins(fontSize: 16, color: context.stokas.inkMuted),
                 ),
                 const SizedBox(height: 20),
 
@@ -183,7 +184,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       borderRadius: BorderRadius.circular(15),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.stokas.surface,
           borderRadius: BorderRadius.circular(15),
           boxShadow: [BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 5, offset: const Offset(0, 3))],
         ),

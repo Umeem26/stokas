@@ -37,6 +37,7 @@ dependencies:
   flutter_dotenv: ^5.1.0
   image_picker: ^1.2.1
   flutter_riverpod: ^3.4.3
+  flutter_svg: ^2.3.0
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -51,6 +52,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -64,6 +66,22 @@ flutter:
   uses-material-design: true
   assets:
     - .env
+    - assets/brand/
+
+  # Tipografi Stokas (docs/brand/tokens.json): Manrope untuk judul/angka besar, Inter untuk teks
+  fonts:
+    - family: Manrope
+      fonts:
+        - asset: assets/fonts/Manrope-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Manrope-ExtraBold.ttf
+          weight: 800
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
@@ -94,3 +112,13 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Ikon peluncur Stokas (jalankan: dart run flutter_launcher_icons). iOS/desktop belum diatur.
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/brand/icon-1024-full.png"
+  adaptive_icon_foreground: "assets/brand/icon-foreground-1024.png"
+  adaptive_icon_background: "#17305C"
+  adaptive_icon_foreground_inset: 0 # PNG sudah memuat ruang aman adaptif
+  min_sdk_android: 21

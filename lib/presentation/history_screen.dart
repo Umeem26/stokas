@@ -6,6 +6,7 @@ import '../core/format.dart';
 import '../data/providers.dart';
 import '../data/transaction_model.dart';
 import 'widgets/error_view.dart';
+import 'design/stokas_tokens.dart';
 
 class HistoryScreen extends ConsumerStatefulWidget {
   const HistoryScreen({super.key});
@@ -32,7 +33,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     // 2. Tampilkan di BottomSheet (Panel bawah)
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: context.stokas.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
         return Padding(
@@ -44,7 +45,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
               Center(child: Container(width: 50, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)))),
               const SizedBox(height: 20),
               Text("Detail Transaksi #${transaction.id}", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 18)),
-              Text(DateFormat('dd MMMM yyyy, HH:mm', 'id_ID').format(transaction.createdAt.toLocal()), style: TextStyle(color: Colors.grey[600])),
+              Text(DateFormat('dd MMMM yyyy, HH:mm', 'id_ID').format(transaction.createdAt.toLocal()), style: TextStyle(color: context.stokas.inkMuted)),
               const Divider(),
               
               // List Barang
@@ -102,7 +103,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
               final trx = data[index];
 
               return ListTile(
-                tileColor: Colors.white,
+                tileColor: context.stokas.surface,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 leading: CircleAvatar(
                   backgroundColor: Colors.blue.shade50,

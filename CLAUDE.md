@@ -33,5 +33,8 @@ State management: flutter_riverpod. Kredensial dibaca dari `.env` (SUPABASE_URL,
 - Jalankan `flutter analyze` dan `flutter test` sebelum commit; keduanya harus bersih/hijau.
 - Jika `flutter build` mengubah `android/gradle.properties` (migrator), kembalikan dengan `git checkout`.
 - Bahasa UI (Indonesia) tidak diubah tanpa diminta.
+- UI pakai token `StokasColors` lewat `context.stokas` (`presentation/design/`); tanpa hex atau ukuran font hardcode di widget.
+- Teks UI Indonesia singkat; label tombol berupa kata kerja ("Simpan", "Tambah stok", "Bayar Rp 37.500").
+- Status selalu ikon + kata (`StatusBadge`), bukan warna saja; uang lewat `MoneyText`/`formatRupiah`.
 - Baca hanya file yang perlu.
 - Laporan akhir maksimal 10 baris.

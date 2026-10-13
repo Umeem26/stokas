@@ -7,6 +7,7 @@ import '../data/providers.dart';
 import '../data/session.dart';
 import 'add_staff_screen.dart';
 import 'widgets/error_view.dart';
+import 'design/stokas_tokens.dart';
 
 /// Kelola akun staf (owner saja). Semua aksi lewat Edge Function staff-admin.
 class StaffScreen extends ConsumerWidget {
@@ -126,7 +127,7 @@ class StaffScreen extends ConsumerWidget {
               final staff = staffList[index];
               final isMe = staff.id == myId;
               return ListTile(
-                tileColor: Colors.white,
+                tileColor: context.stokas.surface,
                 leading: CircleAvatar(
                   backgroundColor: staff.isActive ? Colors.blue.shade50 : Colors.grey.shade200,
                   child: Icon(Icons.person, color: staff.isActive ? Colors.blue : Colors.grey),

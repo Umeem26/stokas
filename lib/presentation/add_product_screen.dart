@@ -10,6 +10,7 @@ import '../data/product_model.dart';
 import '../core/permissions.dart';
 import '../data/providers.dart';
 import '../data/session.dart';
+import 'design/stokas_tokens.dart';
 
 class AddProductScreen extends ConsumerStatefulWidget {
   const AddProductScreen({super.key});
@@ -326,7 +327,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         ),
         child: Text(
           _selectedExpiry == null ? "-" : DateFormat('dd MMM yyyy').format(_selectedExpiry!),
-          style: TextStyle(color: _selectedExpiry == null ? Colors.grey : Colors.black87),
+          style: TextStyle(color: _selectedExpiry == null ? Colors.grey : context.stokas.ink),
         ),
       ),
     );
