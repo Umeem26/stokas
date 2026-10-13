@@ -1,17 +1,21 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/app_exception.dart';
+import '../../core/jakarta_time.dart';
 import '../transaction_model.dart';
 
+/// Transaksi hanya dibaca; penulisan lewat RPC checkout (atomik & idempoten).
 abstract class TransactionRepository {
-  /// Simpan transaksi, potong stok, dan kembalikan nomor nota.
-  Future<int> saveTransaction(TransactionModel transaction);
+  /// Bayar keranjang. [idempotencyKey] yang sama tidak akan membuat transaksi ganda.
+  /// Stok kurang -> [InsufficientStockException]; error lain -> [AppException] berpesan server.
+  Future<TransactionModel> checkout({required String idempotencyKey, required List<CartItem> items, required int paid});
 
-  Future<List<Map<String, dynamic>>> getTodayTransactions();
+  /// Transaksi sejak tengah malam Asia/Jakarta untuk instan [now].
+  Future<List<TransactionModel>> getTodayTransactions(DateTime now);
 
-  Future<List<Map<String, dynamic>>> getTransactionHistory();
+  Future<List<TransactionModel>> getTransactionHistory();
 
-  Future<List<Map<String, dynamic>>> getTransactionItems(int transactionId);
+  Future<List<TransactionItem>> getTransactionItems(int transactionId);
 }
 
 class SupabaseTransactionRepository implements TransactionRepository {
@@ -20,77 +24,48 @@ class SupabaseTransactionRepository implements TransactionRepository {
   SupabaseTransactionRepository(this._client);
 
   @override
-  Future<int> saveTransaction(TransactionModel transaction) {
-    return guard('Gagal menyimpan transaksi', () async {
-      // 1. Simpan header
-      final response = await _client.from('transactions').insert(transaction.toMap()).select().single();
-      final newTransactionId = response['id'];
-
-      // 2. Simpan detail
-      final itemsData = transaction.items.map((item) {
-        return {
-          'transaction_id': newTransactionId,
-          'product_id': item.productId,
-          'quantity': item.quantity,
-          'price_at_purchase': item.price,
-          'subtotal': item.subtotal,
-        };
-      }).toList();
-      await _client.from('transaction_items').insert(itemsData);
-
-      // 3. Potong stok dari baris dengan stok terbanyak
-      for (var item in transaction.items) {
-        final stockResponse = await _client
-            .from('stocks').select().eq('product_id', item.productId)
-            .order('quantity', ascending: false).limit(1).maybeSingle();
-
-        if (stockResponse != null) {
-          final stockId = stockResponse['id'];
-          final currentQty = (stockResponse['quantity'] as num).toDouble();
-          double newQty = currentQty - item.quantity;
-          if (newQty < 0) newQty = 0;
-          await _client.from('stocks').update({'quantity': newQty}).eq('id', stockId);
-        }
-      }
-
-      return newTransactionId;
+  Future<TransactionModel> checkout({required String idempotencyKey, required List<CartItem> items, required int paid}) {
+    return guard('Gagal memproses pembayaran', map: mapCheckoutError, () async {
+      final result = await _client.rpc('checkout', params: {
+        'p_key': idempotencyKey,
+        'p_items': [for (final i in items) {'product_id': i.productId, 'qty': i.quantity}],
+        'p_paid': paid,
+      });
+      return TransactionModel.fromCheckoutJson(Map<String, dynamic>.from(result as Map));
     });
   }
 
   @override
-  Future<List<Map<String, dynamic>>> getTodayTransactions() {
+  Future<List<TransactionModel>> getTodayTransactions(DateTime now) {
     return guard('Gagal memuat transaksi hari ini', () async {
-      final now = DateTime.now();
-      final todayStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-      final startOfDay = "${todayStr}T00:00:00";
-      final endOfDay = "${todayStr}T23:59:59";
-
+      final range = jakartaTodayRangeIso(now);
       final response = await _client
           .from('transactions')
           .select()
-          .gte('created_at', startOfDay)
-          .lte('created_at', endOfDay);
-      return List<Map<String, dynamic>>.from(response);
+          .gte('created_at', range.start)
+          .lt('created_at', range.end);
+      return response.map(TransactionModel.fromRow).toList();
     });
   }
 
   @override
-  Future<List<Map<String, dynamic>>> getTransactionHistory() {
+  Future<List<TransactionModel>> getTransactionHistory() {
     return guard('Gagal memuat riwayat transaksi', () async {
       final response = await _client.from('transactions').select().order('created_at', ascending: false);
-      return List<Map<String, dynamic>>.from(response);
+      return response.map(TransactionModel.fromRow).toList();
     });
   }
 
   @override
-  Future<List<Map<String, dynamic>>> getTransactionItems(int transactionId) {
+  Future<List<TransactionItem>> getTransactionItems(int transactionId) {
     return guard('Gagal memuat detail transaksi', () async {
-      // Join ke products untuk nama barang
+      // Nama & harga diambil dari snapshot item, bukan join ke products
       final response = await _client
           .from('transaction_items')
-          .select('*, products(brand_name)')
-          .eq('transaction_id', transactionId);
-      return List<Map<String, dynamic>>.from(response);
+          .select('product_id, product_name, quantity, price_at_purchase, subtotal')
+          .eq('transaction_id', transactionId)
+          .order('id');
+      return response.map(TransactionItem.fromRow).toList();
     });
   }
 }

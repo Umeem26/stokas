@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // Untuk format Rupiah
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/format.dart';
 import '../core/permissions.dart';
 import '../data/providers.dart';
 import '../data/session.dart';
+import '../data/stock_availability.dart';
 import 'add_product_screen.dart';
 import 'mutation_screen.dart';
 import 'cashier_screen.dart';
 import 'edit_product_screen.dart';
 import 'widgets/account_menu_button.dart';
 import 'widgets/error_view.dart';
+import 'widgets/stock_adjust_dialog.dart';
 
 class StockListScreen extends ConsumerStatefulWidget {
   const StockListScreen({super.key});
@@ -21,12 +23,10 @@ class StockListScreen extends ConsumerStatefulWidget {
 class _StockListScreenState extends ConsumerState<StockListScreen> {
   void _refresh() => ref.invalidate(stockListProvider);
 
-  // Formatter Rupiah
-  final _currency = NumberFormat.currency(
-    locale: 'id_ID', 
-    symbol: 'Rp ', 
-    decimalDigits: 0
-  );
+  Future<void> _adjust(Map<String, dynamic> stock, StockAdjustMode mode) async {
+    final saved = await showStockAdjustDialog(context, mode: mode, stock: stock);
+    if (saved == true) _refresh();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,13 +70,15 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
             );
           }
 
+          final now = ref.read(clockProvider)();
           return ListView.builder(
             padding: const EdgeInsets.all(12),
             itemCount: stocks.length,
             itemBuilder: (context, index) {
               final stock = stocks[index];
               final product = stock['products'];
-              final price = product['price'] ?? 0; // Ambil harga
+              final price = (product['price'] as num?)?.round() ?? 0; // Ambil harga
+              final expired = isBatchExpired(stock, now);
               
               return Card(
                 child: Padding(
@@ -115,7 +117,7 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
                             
                             // TAMPILKAN HARGA DISINI
                             Text(
-                              _currency.format(price),
+                              formatRupiah(price),
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold, 
                                 color: Colors.green, // Warna hijau uang
@@ -128,6 +130,14 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
                             if (stock['expiry_date'] != null)
                                Text("Exp: ${stock['expiry_date'].substring(0, 10)}", 
                                    style: const TextStyle(color: Colors.red, fontSize: 11)),
+                            // Batch kedaluwarsa tidak dihitung sebagai stok tersedia di Kasir
+                            if (expired)
+                              Container(
+                                margin: const EdgeInsets.only(top: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(10)),
+                                child: const Text("Kedaluwarsa", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                              ),
                           ],
                         ),
                       ),
@@ -139,7 +149,7 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                "${stock['quantity']}",
+                                formatQty(stock['quantity'] as num),
                                 style: TextStyle(
                                   fontSize: 18, 
                                   fontWeight: FontWeight.bold, 
@@ -165,6 +175,26 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
                             },
                           ),
                           
+                          // --- STOK MASUK & OPNAME ---
+                          if (can(role, Permission.restockStock) || can(role, Permission.countStock))
+                          PopupMenuButton<StockAdjustMode>(
+                            icon: const Icon(Icons.more_vert, color: Colors.grey),
+                            tooltip: "Stok Masuk / Opname",
+                            onSelected: (mode) => _adjust(stock, mode),
+                            itemBuilder: (context) => [
+                              if (can(role, Permission.restockStock))
+                                const PopupMenuItem(
+                                  value: StockAdjustMode.restock,
+                                  child: ListTile(leading: Icon(Icons.add_box), title: Text("Stok Masuk")),
+                                ),
+                              if (can(role, Permission.countStock))
+                                const PopupMenuItem(
+                                  value: StockAdjustMode.opname,
+                                  child: ListTile(leading: Icon(Icons.fact_check), title: Text("Opname")),
+                                ),
+                            ],
+                          ),
+
                           // --- TOMBOL EDIT (BARU) ---
                           if (can(role, Permission.editProduct))
                           IconButton(

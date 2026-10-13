@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'profile_model.dart';
+import 'stock_availability.dart';
+import 'transaction_model.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/product_repository.dart';
 import 'repositories/profile_repository.dart';
@@ -47,33 +49,29 @@ final stockListProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>
   (ref) => ref.watch(stockRepositoryProvider).getStockList(),
 );
 
-final transactionHistoryProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>(
+final transactionHistoryProvider = FutureProvider.autoDispose<List<TransactionModel>>(
   (ref) => ref.watch(transactionRepositoryProvider).getTransactionHistory(),
 );
 
+/// Jam sekarang; bisa di-override di tes.
+final clockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
+
 class DashboardSummary {
-  final double todayRevenue;
+  final int todayRevenue;
   final int lowStockCount;
 
   const DashboardSummary({required this.todayRevenue, required this.lowStockCount});
 }
 
 final dashboardSummaryProvider = FutureProvider.autoDispose<DashboardSummary>((ref) async {
-  // 1. Omzet hari ini
-  final transactions = await ref.watch(transactionRepositoryProvider).getTodayTransactions();
-  double total = 0;
-  for (var t in transactions) {
-    total += (t['total_amount'] as num).toDouble();
-  }
+  final now = ref.watch(clockProvider)();
 
-  // 2. Stok menipis (qty <= min_stock)
+  // 1. Omzet hari ini (sejak tengah malam Asia/Jakarta)
+  final transactions = await ref.watch(transactionRepositoryProvider).getTodayTransactions(now);
+  final total = transactions.fold(0, (sum, t) => sum + t.totalAmount);
+
+  // 2. Barang menipis: stok tersedia (tanpa batch kedaluwarsa) <= min_stock
   final stocks = await ref.watch(stockRepositoryProvider).getStockList();
-  int lowCount = 0;
-  for (var s in stocks) {
-    final qty = (s['quantity'] as num).toDouble();
-    final min = (s['products']['min_stock'] as num).toDouble();
-    if (qty <= min) lowCount++;
-  }
 
-  return DashboardSummary(todayRevenue: total, lowStockCount: lowCount);
+  return DashboardSummary(todayRevenue: total, lowStockCount: lowStockCount(stocks, now));
 });

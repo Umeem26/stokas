@@ -24,7 +24,8 @@ enum Permission {
   editProduct,
   deleteProduct,
   moveStock,
-  restockStock,
+  restockStock, // Stok masuk (RPC restock)
+  countStock, // Opname (RPC stock_count)
   editPrices,
   viewCapitalPrice,
   manageStaff,
@@ -42,6 +43,7 @@ const _warehousePermissions = {
   Permission.editProduct,
   Permission.moveStock,
   Permission.restockStock,
+  Permission.countStock,
 };
 
 /// Satu-satunya sumber aturan hak akses di UI. Penjagaan sebenarnya ada di RLS.

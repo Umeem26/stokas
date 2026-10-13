@@ -14,6 +14,14 @@ State management: flutter_riverpod. Kredensial dibaca dari `.env` (SUPABASE_URL,
 - `presentation/` — layar; `presentation/widgets/error_view.dart` untuk state gagal + "Coba lagi".
 - `supabase/` — migrasi SQL + Edge Function (dokumentasi; jangan dijalankan/deploy dari sini).
 
+## Fase 2 (skema 0004)
+- Uang = `int` Rupiah; format hanya lewat `core/format.dart` (`formatRupiah`). Qty tetap `num`.
+- Tulis stok/transaksi HANYA via RPC: `checkout`, `restock`, `stock_count`, `transfer_stock`. Tabel stocks/transactions/transaction_items hanya SELECT.
+- `data/checkout_controller.dart`: keranjang + kunci idempotensi (sama saat retry, baru saat keranjang berubah/sukses).
+- Stok tersedia = batch belum kedaluwarsa (`data/stock_availability.dart`, tanggal Asia/Jakarta di `core/jakarta_time.dart`).
+- Harga modal di `product_costs` (owner saja). Hapus barang = `is_deleted=true`.
+- Tes memakai repository palsu di `test/fakes.dart`.
+
 ## Peran (lib/core/permissions.dart, `can(role, Permission)`)
 - owner: semua + Staf. kasir: Kasir, Riwayat, lihat Stok (beranda Kasir).
 - gudang: Stok tambah/edit/mutasi, tanpa ubah harga & tanpa harga modal (beranda Stok).

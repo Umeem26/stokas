@@ -1,21 +1,25 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/app_exception.dart';
+import '../../core/format.dart';
+import '../stock_availability.dart';
 
+/// Tabel stocks hanya dibaca; semua perubahan stok lewat RPC (restock, stock_count, transfer_stock).
 abstract class StockRepository {
-  /// Daftar stok per lantai beserta produk dan kategorinya (produk terhapus tidak ikut).
+  /// Daftar batch stok beserta produk dan kategorinya (produk terhapus tidak ikut).
   Future<List<Map<String, dynamic>>> getStockList();
 
-  /// Pindahkan stok antar lantai.
-  Future<void> moveStock({
-    required int sourceStockId,
-    required String productId,
-    required String targetFloor,
-    required double qtyToMove,
-    required double currentSourceQty,
-    DateTime? expiryDate,
-  });
+  /// Stok masuk: tambah [qty] ke batch (produk, lantai, kedaluwarsa).
+  Future<void> restock({required String productId, required String floor, DateTime? expiry, required num qty, String? note});
+
+  /// Opname: set batch menjadi hasil hitung fisik [counted].
+  Future<void> stockCount({required String productId, required String floor, DateTime? expiry, required num counted, String? note});
+
+  /// Pindahkan [qty] dari batch di lantai [from] ke lantai [to] (kedaluwarsa sama).
+  Future<void> transferStock({required String productId, required String from, required String to, DateTime? expiry, required num qty});
 }
+
+String? _note(String? note) => (note == null || note.trim().isEmpty) ? null : note.trim();
 
 class SupabaseStockRepository implements StockRepository {
   final SupabaseClient _client;
@@ -30,50 +34,46 @@ class SupabaseStockRepository implements StockRepository {
           .select('*, products!inner(*, categories(*))') // !inner agar bisa difilter
           .eq('products.is_deleted', false)
           .order('created_at', ascending: false);
-      return List<Map<String, dynamic>>.from(response);
+      return withoutDeleted(List<Map<String, dynamic>>.from(response));
     });
   }
 
   @override
-  Future<void> moveStock({
-    required int sourceStockId,
-    required String productId,
-    required String targetFloor,
-    required double qtyToMove,
-    required double currentSourceQty,
-    DateTime? expiryDate,
-  }) {
+  Future<void> restock({required String productId, required String floor, DateTime? expiry, required num qty, String? note}) {
+    return guard('Gagal menyimpan stok masuk', () async {
+      await _client.rpc('restock', params: {
+        'p_product': productId,
+        'p_floor': floor,
+        'p_expiry': expiry == null ? null : formatDateParam(expiry),
+        'p_qty': qty,
+        'p_note': _note(note),
+      });
+    });
+  }
+
+  @override
+  Future<void> stockCount({required String productId, required String floor, DateTime? expiry, required num counted, String? note}) {
+    return guard('Gagal menyimpan opname', () async {
+      await _client.rpc('stock_count', params: {
+        'p_product': productId,
+        'p_floor': floor,
+        'p_expiry': expiry == null ? null : formatDateParam(expiry),
+        'p_counted': counted,
+        'p_note': _note(note),
+      });
+    });
+  }
+
+  @override
+  Future<void> transferStock({required String productId, required String from, required String to, DateTime? expiry, required num qty}) {
     return guard('Gagal memindahkan stok', () async {
-      if (qtyToMove > currentSourceQty) {
-        throw AppException('Stok tidak cukup! Cuma ada $currentSourceQty');
-      }
-
-      // Kurangi stok di lantai asal; hapus barisnya jika habis
-      final sisa = currentSourceQty - qtyToMove;
-      if (sisa == 0) {
-        await _client.from('stocks').delete().eq('id', sourceStockId);
-      } else {
-        await _client.from('stocks').update({'quantity': sisa}).eq('id', sourceStockId);
-      }
-
-      final checkDest = await _client
-          .from('stocks')
-          .select()
-          .eq('product_id', productId)
-          .eq('floor_name', targetFloor)
-          .maybeSingle();
-
-      if (checkDest != null) {
-        final double oldQty = (checkDest['quantity'] as num).toDouble();
-        await _client.from('stocks').update({'quantity': oldQty + qtyToMove}).eq('id', checkDest['id']);
-      } else {
-        await _client.from('stocks').insert({
-          'product_id': productId,
-          'floor_name': targetFloor,
-          'quantity': qtyToMove,
-          'expiry_date': expiryDate?.toIso8601String(),
-        });
-      }
+      await _client.rpc('transfer_stock', params: {
+        'p_product': productId,
+        'p_from': from,
+        'p_to': to,
+        'p_expiry': expiry == null ? null : formatDateParam(expiry),
+        'p_qty': qty,
+      });
     });
   }
 }

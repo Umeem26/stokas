@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/config.dart';
+import '../core/format.dart';
 import '../data/providers.dart';
 
 class MutationScreen extends ConsumerStatefulWidget {
@@ -18,7 +20,7 @@ class _MutationScreenState extends ConsumerState<MutationScreen> {
 
   late String _currentFloor;
   late String _targetFloor;
-  late double _maxQty;
+  late num _maxQty;
   late String _productName;
   late String _unit;
 
@@ -32,26 +34,29 @@ class _MutationScreenState extends ConsumerState<MutationScreen> {
     _productName = product['brand_name'];
     _unit = product['unit_type'];
     _currentFloor = stock['floor_name'];
-    _maxQty = (stock['quantity'] as num).toDouble();
+    _maxQty = stock['quantity'] as num;
 
     // Logika otomatis: Kalau asal Lt 1, tujuan pasti Lt 2 (dan sebaliknya)
-    _targetFloor = _currentFloor == 'Lantai 1' ? 'Lantai 2' : 'Lantai 1';
+    _targetFloor = storeFloors.firstWhere((f) => f != _currentFloor, orElse: () => storeFloors.first);
   }
 
+  bool _saving = false;
+
   void _submitMutation() async {
+    if (_saving) return;
     if (_formKey.currentState!.validate()) {
+      setState(() => _saving = true);
       try {
-        final qty = double.parse(_qtyController.text);
-        
-        await ref.read(stockRepositoryProvider).moveStock(
-          sourceStockId: widget.sourceStock['id'],
+        final qty = num.parse(_qtyController.text);
+        final expiry = widget.sourceStock['expiry_date'] as String?;
+
+        // Atomik di server (RPC transfer_stock): batch asal & tujuan memakai kedaluwarsa yang sama.
+        await ref.read(stockRepositoryProvider).transferStock(
           productId: widget.sourceStock['product_id'],
-          targetFloor: _targetFloor,
-          qtyToMove: qty,
-          currentSourceQty: _maxQty,
-          expiryDate: widget.sourceStock['expiry_date'] != null 
-              ? DateTime.parse(widget.sourceStock['expiry_date']) 
-              : null,
+          from: _currentFloor,
+          to: _targetFloor,
+          expiry: expiry == null ? null : DateTime.parse(expiry.substring(0, 10)),
+          qty: qty,
         );
 
         if (mounted) {
@@ -62,6 +67,7 @@ class _MutationScreenState extends ConsumerState<MutationScreen> {
         }
       } catch (e) {
         if (!mounted) return;
+        setState(() => _saving = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.toString().replaceAll("Exception:", "")), backgroundColor: Colors.red),
         );
@@ -101,7 +107,7 @@ class _MutationScreenState extends ConsumerState<MutationScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(_productName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          Text("Stok Tersedia: $_maxQty $_unit", style: const TextStyle(color: Colors.grey)),
+                          Text("Stok Tersedia: ${formatQty(_maxQty)} $_unit", style: const TextStyle(color: Colors.grey)),
                         ],
                       )
                     ],
@@ -126,11 +132,11 @@ class _MutationScreenState extends ConsumerState<MutationScreen> {
                     decoration: InputDecoration(
                       labelText: "Jumlah yang dipindah",
                       suffixText: _unit,
-                      helperText: "Maksimal $_maxQty $_unit",
+                      helperText: "Maksimal ${formatQty(_maxQty)} $_unit",
                     ),
                     validator: (value) {
                       if (value == null || value.isEmpty) return "Isi jumlah dulu";
-                      final n = double.tryParse(value);
+                      final n = num.tryParse(value);
                       if (n == null) return "Harus angka";
                       if (n <= 0) return "Minimal 1";
                       if (n > _maxQty) return "Stok tidak cukup!";
@@ -148,7 +154,7 @@ class _MutationScreenState extends ConsumerState<MutationScreen> {
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
-                      onPressed: _submitMutation,
+                      onPressed: _saving ? null : _submitMutation,
                       icon: const Icon(Icons.check_circle_outline),
                       label: const Text("PROSES PINDAH", style: TextStyle(fontWeight: FontWeight.bold)),
                     ),

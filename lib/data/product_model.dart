@@ -4,9 +4,7 @@ class ProductModel {
   final int categoryId;
   final String unitType;
   final double minStock;
-  // Tambahan Baru:
-  final double price;        // Harga Jual
-  final double capitalPrice; // Harga Modal
+  final int price; // Harga jual (Rupiah). Harga modal ada di tabel product_costs (khusus owner).
 
   ProductModel({
     required this.id,
@@ -15,7 +13,6 @@ class ProductModel {
     required this.unitType,
     required this.minStock,
     required this.price,
-    required this.capitalPrice,
   });
 
   factory ProductModel.fromMap(Map<String, dynamic> map) {
@@ -25,9 +22,8 @@ class ProductModel {
       categoryId: map['category_id'],
       unitType: map['unit_type'],
       minStock: (map['min_stock'] as num).toDouble(),
-      // Ambil data harga (pakai 0 jika kosong)
-      price: (map['price'] as num?)?.toDouble() ?? 0.0,
-      capitalPrice: (map['capital_price'] as num?)?.toDouble() ?? 0.0,
+      // Pakai 0 jika kosong
+      price: (map['price'] as num?)?.round() ?? 0,
     );
   }
 }

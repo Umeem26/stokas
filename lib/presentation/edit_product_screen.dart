@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/format.dart';
 import '../data/product_model.dart';
 import '../core/permissions.dart';
 import '../data/providers.dart';
@@ -39,39 +40,55 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
     _nameController = TextEditingController(text: p['brand_name']);
     _minStockController = TextEditingController(text: p['min_stock'].toString());
     
-    // Format Harga biar ga error (Hilangkan .0 jika ada)
-    double price = (p['price'] as num).toDouble();
-    double capital = (p['capital_price'] as num).toDouble();
-    _priceController = TextEditingController(text: price.toInt().toString());
-    _capitalPriceController = TextEditingController(text: capital.toInt().toString());
+    final price = (p['price'] as num?)?.round() ?? 0;
+    _priceController = TextEditingController(text: CurrencyInputFormatter.format(price));
+    _capitalPriceController = TextEditingController();
 
     _selectedCategory = p['category_id'].toString();
     _selectedUnit = p['unit_type'];
+
+    // Harga modal ada di product_costs dan hanya terbaca oleh owner.
+    if (can(ref.read(currentRoleProvider), Permission.viewCapitalPrice)) _loadCapitalPrice();
+  }
+
+  bool _capitalLoaded = false;
+
+  Future<void> _loadCapitalPrice() async {
+    try {
+      final capital = await ref.read(productRepositoryProvider).getCapitalPrice(widget.productData['id']);
+      if (!mounted) return;
+      setState(() {
+        _capitalPriceController.text = CurrencyInputFormatter.format(capital ?? 0);
+        _capitalLoaded = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e"), backgroundColor: Colors.red));
+    }
   }
 
   // Fungsi Update
   void _updateProduct() async {
     if (_formKey.currentState!.validate()) {
       try {
-        // Bersihkan titik rupiah
-        final cleanPrice = _priceController.text.replaceAll('.', '');
-        final cleanCapital = _capitalPriceController.text.replaceAll('.', '');
-
         final product = ProductModel(
           id: _idController.text, // ID Tetap
           brandName: _nameController.text,
           categoryId: int.parse(_selectedCategory!),
           unitType: _selectedUnit!,
           minStock: double.parse(_minStockController.text),
-          price: double.parse(cleanPrice),
-          capitalPrice: double.parse(cleanCapital),
+          price: parseRupiah(_priceController.text),
         );
 
-        // Non-owner tidak mengirim harga sama sekali (penjagaan DB: trigger + Fase 2).
-        await ref.read(productRepositoryProvider).updateProduct(
-              product,
-              includePrices: can(ref.read(currentRoleProvider), Permission.editPrices),
-            );
+        // Non-owner tidak mengirim harga sama sekali (penjagaan DB: trigger).
+        final role = ref.read(currentRoleProvider);
+        final repo = ref.read(productRepositoryProvider);
+        await repo.updateProduct(product, includePrices: can(role, Permission.editPrices));
+
+        // Harga modal hanya disimpan bila sudah berhasil dimuat (agar tidak menimpa dengan 0).
+        if (can(role, Permission.viewCapitalPrice) && _capitalLoaded) {
+          await repo.saveCapitalPrice(product.id, parseRupiah(_capitalPriceController.text));
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Data Berhasil Diperbarui!")));
@@ -91,7 +108,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
       context: context, 
       builder: (ctx) => AlertDialog(
         title: const Text("Hapus Barang?"),
-        content: const Text("Barang ini akan hilang permanen dari database. Yakin?"),
+        content: const Text("Barang akan disembunyikan dari daftar; riwayat transaksi tetap aman. Yakin?"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Batal")),
           TextButton(
@@ -163,7 +180,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                     Row(
                       children: [
                         if (can(role, Permission.viewCapitalPrice)) ...[
-                          Expanded(child: _buildTextField(_capitalPriceController, "Modal", Icons.monetization_on, isCurrency: true)),
+                          Expanded(child: _buildTextField(_capitalPriceController, "Modal", Icons.monetization_on, isCurrency: true, readOnly: !_capitalLoaded)),
                           const SizedBox(width: 10),
                         ],
                         Expanded(child: _buildTextField(_priceController, "Jual", Icons.sell, isCurrency: true)),

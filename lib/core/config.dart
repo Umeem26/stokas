@@ -10,3 +10,6 @@ String usernameToEmail(String input) {
   if (value.contains('@')) return value;
   return '${value.toLowerCase()}@$staffEmailDomain';
 }
+
+/// Lokasi stok yang dipakai di form barang, mutasi, stok masuk, dan opname.
+const storeFloors = ['Lantai 1', 'Lantai 2'];

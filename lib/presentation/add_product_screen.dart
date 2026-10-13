@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart'; // Plugin Foto
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/config.dart';
+import '../core/format.dart';
 import '../data/product_model.dart';
 import '../core/permissions.dart';
 import '../data/providers.dart';
@@ -29,7 +31,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   
   String? _selectedCategory;
   String _selectedUnit = 'pcs';
-  String _selectedFloor = 'Lantai 1';
+  String _selectedFloor = storeFloors.first;
   DateTime? _selectedExpiry;
   File? _imageFile; // Variabel penampung foto sementara
 
@@ -91,10 +93,8 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           imageUrl = await service.uploadImage(_imageFile!);
         }
 
-        // Non-owner tidak mengisi harga; disimpan 0 lalu diisi owner.
+        // Non-owner tidak mengisi harga; harga jual 0 sampai diisi owner.
         final canEditPrices = can(ref.read(currentRoleProvider), Permission.editPrices);
-        final cleanPrice = canEditPrices ? _priceController.text.replaceAll('.', '') : '0';
-        final cleanCapital = canEditPrices ? _capitalPriceController.text.replaceAll('.', '') : '0';
 
         final product = ProductModel(
           id: _idController.text,
@@ -102,18 +102,28 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           categoryId: int.parse(_selectedCategory!),
           unitType: _selectedUnit,
           minStock: double.parse(_minStockController.text),
-          price: double.parse(cleanPrice),
-          capitalPrice: double.parse(cleanCapital),
+          price: canEditPrices ? parseRupiah(_priceController.text) : 0,
         );
 
         // 2. Simpan Data Produk (termasuk URL foto)
-        await service.addProduct(
-          product, 
-          _selectedFloor, 
-          double.parse(_qtyController.text), 
-          _selectedExpiry,
-          imageUrl // Kirim URL
-        );
+        await service.addProduct(product, imageUrl: imageUrl);
+
+        // 3. Harga modal ke product_costs (khusus owner)
+        if (can(ref.read(currentRoleProvider), Permission.viewCapitalPrice)) {
+          await service.saveCapitalPrice(product.id, parseRupiah(_capitalPriceController.text));
+        }
+
+        // 4. Stok awal lewat RPC restock
+        final initialQty = num.parse(_qtyController.text);
+        if (initialQty > 0) {
+          await ref.read(stockRepositoryProvider).restock(
+                productId: product.id,
+                floor: _selectedFloor,
+                expiry: _selectedExpiry,
+                qty: initialQty,
+                note: 'Stok awal',
+              );
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -196,8 +206,10 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                   if (can(ref.watch(currentRoleProvider), Permission.editPrices))
                     Row(
                       children: [
-                        Expanded(child: _buildTextField(_capitalPriceController, "Harga Modal", Icons.monetization_on_outlined, isCurrency: true)),
-                        const SizedBox(width: 10),
+                        if (can(ref.watch(currentRoleProvider), Permission.viewCapitalPrice)) ...[
+                          Expanded(child: _buildTextField(_capitalPriceController, "Harga Modal", Icons.monetization_on_outlined, isCurrency: true)),
+                          const SizedBox(width: 10),
+                        ],
                         Expanded(child: _buildTextField(_priceController, "Harga Jual", Icons.sell, isCurrency: true)),
                       ],
                     )
@@ -290,7 +302,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     return DropdownButtonFormField<String>(
       decoration: const InputDecoration(labelText: "Lokasi"),
       initialValue: _selectedFloor,
-      items: ['Lantai 1', 'Lantai 2'].map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
+      items: storeFloors.map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
       onChanged: (v) => setState(() => _selectedFloor = v!),
     );
   }
@@ -321,15 +333,15 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   }
 }
 
-// Formatter Rupiah
+// Formatter input uang: angka saja, dengan titik ribuan (1.250.000)
 class CurrencyInputFormatter extends TextInputFormatter {
+  static String format(int value) => formatThousands(value);
+
   @override
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
-    if (newValue.text.isEmpty) return newValue.copyWith(text: '');
-    String newText = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
-    final int value = int.parse(newText);
-    final formatter = NumberFormat('#,###', 'id_ID');
-    newText = formatter.format(value);
+    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return newValue.copyWith(text: '', selection: const TextSelection.collapsed(offset: 0));
+    final newText = format(parseRupiah(digits));
     return newValue.copyWith(text: newText, selection: TextSelection.collapsed(offset: newText.length));
   }
 }

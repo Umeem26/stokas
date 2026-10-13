@@ -1,0 +1,163 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:minimarket_pos/core/app_exception.dart';
+import 'package:minimarket_pos/data/product_model.dart';
+import 'package:minimarket_pos/data/repositories/product_repository.dart';
+import 'package:minimarket_pos/data/repositories/stock_repository.dart';
+import 'package:minimarket_pos/data/repositories/transaction_repository.dart';
+import 'package:minimarket_pos/data/transaction_model.dart';
+
+/// Panggilan checkout yang tercatat oleh [FakeTransactionRepository].
+class CheckoutCall {
+  final String key;
+  final List<CartItem> items;
+  final int paid;
+  CheckoutCall(this.key, this.items, this.paid);
+}
+
+/// Repository palsu: meniru RPC checkout (idempoten per kunci). [nextError] dilempar sekali;
+/// [gate] menahan jawaban sampai di-complete (untuk uji tap ganda).
+class FakeTransactionRepository implements TransactionRepository {
+  final calls = <CheckoutCall>[];
+  final _byKey = <String, TransactionModel>{};
+  Object? nextError;
+  Completer<void>? gate;
+  int _nextId = 1;
+
+  @override
+  Future<TransactionModel> checkout({required String idempotencyKey, required List<CartItem> items, required int paid}) async {
+    calls.add(CheckoutCall(idempotencyKey, items, paid));
+    if (gate != null) await gate!.future;
+    final error = nextError;
+    if (error != null) {
+      nextError = null;
+      throw error;
+    }
+    return _byKey.putIfAbsent(idempotencyKey, () {
+      final total = items.fold(0, (s, i) => s + i.subtotal);
+      return TransactionModel(
+        id: _nextId++,
+        totalAmount: total,
+        paidAmount: paid,
+        changeAmount: paid - total,
+        createdAt: DateTime.now(),
+        items: [
+          for (final i in items)
+            TransactionItem(productId: i.productId, productName: i.productName, quantity: i.quantity, price: i.price, subtotal: i.subtotal),
+        ],
+      );
+    });
+  }
+
+  int get transactionCount => _byKey.length;
+
+  @override
+  Future<List<TransactionModel>> getTodayTransactions(DateTime now) async => _byKey.values.toList();
+
+  @override
+  Future<List<TransactionModel>> getTransactionHistory() async => _byKey.values.toList();
+
+  @override
+  Future<List<TransactionItem>> getTransactionItems(int transactionId) async =>
+      _byKey.values.firstWhere((t) => t.id == transactionId).items;
+}
+
+/// Repository palsu: stok dalam memori dengan semantik RPC restock / stock_count / transfer_stock.
+class FakeStockRepository implements StockRepository {
+  final List<Map<String, dynamic>> rows;
+  final calls = <String>[];
+  int loads = 0;
+
+  FakeStockRepository(this.rows);
+
+  static String _d(DateTime? d) => d == null ? '-' : '${d.year}-${d.month}-${d.day}';
+
+  Map<String, dynamic>? _find(String productId, String floor, DateTime? expiry) {
+    for (final r in rows) {
+      final e = r['expiry_date'] as String?;
+      if (r['product_id'] == productId && r['floor_name'] == floor && _d(e == null ? null : DateTime.parse(e)) == _d(expiry)) {
+        return r;
+      }
+    }
+    return null;
+  }
+
+  Map<String, dynamic> _upsert(String productId, String floor, DateTime? expiry) {
+    final existing = _find(productId, floor, expiry);
+    if (existing != null) return existing;
+    final template = rows.firstWhere((r) => r['product_id'] == productId);
+    final row = {
+      ...template,
+      'id': rows.length + 1,
+      'floor_name': floor,
+      'expiry_date': expiry == null ? null : '${expiry.year}-${expiry.month.toString().padLeft(2, '0')}-${expiry.day.toString().padLeft(2, '0')}',
+      'quantity': 0,
+    };
+    rows.add(row);
+    return row;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getStockList() async {
+    loads++;
+    return [for (final r in rows) {...r}];
+  }
+
+  @override
+  Future<void> restock({required String productId, required String floor, DateTime? expiry, required num qty, String? note}) async {
+    calls.add('restock $productId $floor ${_d(expiry)} $qty ${note ?? ''}'.trim());
+    final row = _upsert(productId, floor, expiry);
+    row['quantity'] = (row['quantity'] as num) + qty;
+  }
+
+  @override
+  Future<void> stockCount({required String productId, required String floor, DateTime? expiry, required num counted, String? note}) async {
+    calls.add('opname $productId $floor ${_d(expiry)} $counted ${note ?? ''}'.trim());
+    _upsert(productId, floor, expiry)['quantity'] = counted;
+  }
+
+  @override
+  Future<void> transferStock({required String productId, required String from, required String to, DateTime? expiry, required num qty}) async {
+    calls.add('transfer $productId $from->$to ${_d(expiry)} $qty');
+    final src = _find(productId, from, expiry);
+    if (src == null || (src['quantity'] as num) < qty) throw const AppException('Stok di lantai asal tidak cukup');
+    src['quantity'] = (src['quantity'] as num) - qty;
+    final dst = _upsert(productId, to, expiry);
+    dst['quantity'] = (dst['quantity'] as num) + qty;
+  }
+}
+
+/// Repository produk palsu: mencatat insert, harga modal (product_costs), dan soft delete.
+class FakeProductRepository implements ProductRepository {
+  final added = <ProductModel>[];
+  final capitalPrices = <String, int>{};
+  final deleted = <String>[];
+  int capitalReads = 0;
+
+  @override
+  Future<List<Map<String, dynamic>>> getCategories() async => [
+        {'id': 1, 'name': 'Makanan'},
+      ];
+
+  @override
+  Future<void> addProduct(ProductModel product, {String? imageUrl}) async => added.add(product);
+
+  @override
+  Future<void> updateProduct(ProductModel product, {bool includePrices = true}) async {}
+
+  @override
+  Future<int?> getCapitalPrice(String productId) async {
+    capitalReads++;
+    return capitalPrices[productId];
+  }
+
+  @override
+  Future<void> saveCapitalPrice(String productId, int capitalPrice) async => capitalPrices[productId] = capitalPrice;
+
+  @override
+  Future<void> deleteProduct(String productId) async => deleted.add(productId);
+
+  @override
+  Future<String?> uploadImage(File imageFile) async => null;
+}

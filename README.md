@@ -30,6 +30,7 @@ Aplikasi ini adalah sistem **Point of Sale (POS)** dan **Manajemen Inventaris** 
 - `migrations/0001_baseline.sql` — skema awal (`categories`, `products`, `stocks`, `transactions`, `transaction_items`) sesuai kondisi 13 Oktober 2026, tanpa RLS.
 - `migrations/0002_auth_roles_rls.sql` — tabel `profiles`, peran (`owner`/`cashier`/`warehouse`), kolom `transactions.cashier_id`, dan RLS di semua tabel.
 - `migrations/0003_storage_policies.sql` — kebijakan akses bucket `product-images`.
+- `migrations/0004_checkout_stock_rpc.sql` — uang jadi `bigint` (Rupiah bulat), harga modal pindah ke `product_costs` (khusus owner), batch stok per (produk, lantai, kedaluwarsa), audit `stock_movements`, serta RPC `checkout`, `restock`, `stock_count`, `transfer_stock`.
 - `functions/staff-admin` — Edge Function untuk owner: tambah staf, reset password, aktif/nonaktifkan akun.
 
 File-file ini adalah dokumentasi dari yang sudah diterapkan ke proyek Supabase; tidak dijalankan otomatis oleh aplikasi maupun CI.
@@ -44,6 +45,12 @@ Semua pengguna wajib login. Staf login dengan **username** (dipetakan ke email `
 | Gudang | Stok | Tambah/edit/mutasi stok; tidak bisa mengubah harga dan tidak melihat harga modal |
 
 Akun staf dibuat owner dari menu **Staf** di Dashboard. Hak akses di aplikasi hanya menyembunyikan menu; penjagaan sebenarnya ada di RLS database.
+
+### 🧾 Checkout & Stok (Fase 2)
+- **Checkout atomik** lewat RPC `checkout`: total dihitung server, stok dipotong FEFO (kedaluwarsa terdekat dulu), batch kedaluwarsa dilewati. Setiap keranjang membawa kunci idempotensi (UUID v4) sehingga menekan Bayar ulang setelah gagal jaringan tidak membuat transaksi ganda.
+- **Stok hanya diubah lewat RPC**: Stok masuk (`restock`), Opname (`stock_count`), dan Mutasi (`transfer_stock`) — menu ⋮ di tiap batch pada layar Stok (owner/gudang). Batch kedaluwarsa diberi label *Kedaluwarsa* dan tidak dihitung tersedia di Kasir.
+- **Uang = int Rupiah** di seluruh aplikasi; nota & riwayat memakai snapshot nama/harga barang. "Hari ini" dihitung dari tengah malam Asia/Jakarta.
+- **Harga modal** disimpan di `product_costs` dan hanya dibaca/diisi owner. Hapus barang = soft delete (`is_deleted`).
 
 ### ⚙️ Instalasi & Persiapan
 1. Clone repositori:

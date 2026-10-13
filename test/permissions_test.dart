@@ -11,6 +11,7 @@ void main() {
       Permission.editProduct,
       Permission.moveStock,
       Permission.restockStock,
+      Permission.countStock,
     },
   };
 
@@ -28,8 +29,8 @@ void main() {
     });
   }
 
-  test('kasir hanya lihat stok: tanpa tambah/edit/hapus/mutasi', () {
-    for (final p in [Permission.addProduct, Permission.editProduct, Permission.deleteProduct, Permission.moveStock]) {
+  test('kasir hanya lihat stok: tanpa tambah/edit/hapus/mutasi/stok masuk/opname', () {
+    for (final p in [Permission.addProduct, Permission.editProduct, Permission.deleteProduct, Permission.moveStock, Permission.restockStock, Permission.countStock]) {
       expect(can(AppRole.cashier, p), isFalse, reason: p.name);
     }
   });

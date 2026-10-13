@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/format.dart';
 import '../core/permissions.dart';
 import '../data/providers.dart';
 import '../data/session.dart';
@@ -21,9 +22,6 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  // Formatter Rupiah
-  final _currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
-
   // Fungsi untuk menyegarkan data Dashboard
   void _loadDashboardData() => ref.invalidate(dashboardSummaryProvider);
 
@@ -82,7 +80,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       const Text("Pendapatan Hari Ini", style: TextStyle(color: Colors.white70, fontSize: 14)),
                       const SizedBox(height: 5),
                       Text(
-                        _currency.format(data.todayRevenue),
+                        formatRupiah(data.todayRevenue),
                         style: GoogleFonts.poppins(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
                       const SizedBox(height: 10),
