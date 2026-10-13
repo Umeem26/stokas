@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
-import '../data/product_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/providers.dart';
 
-class MutationScreen extends StatefulWidget {
+class MutationScreen extends ConsumerStatefulWidget {
   // Data yang dikirim dari halaman depan
   final Map<String, dynamic> sourceStock; 
 
   const MutationScreen({super.key, required this.sourceStock});
 
   @override
-  State<MutationScreen> createState() => _MutationScreenState();
+  ConsumerState<MutationScreen> createState() => _MutationScreenState();
 }
 
-class _MutationScreenState extends State<MutationScreen> {
-  final _service = ProductService();
+class _MutationScreenState extends ConsumerState<MutationScreen> {
   final _qtyController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
@@ -43,7 +43,7 @@ class _MutationScreenState extends State<MutationScreen> {
       try {
         final qty = double.parse(_qtyController.text);
         
-        await _service.moveStock(
+        await ref.read(stockRepositoryProvider).moveStock(
           sourceStockId: widget.sourceStock['id'],
           productId: widget.sourceStock['product_id'],
           targetFloor: _targetFloor,
@@ -61,6 +61,7 @@ class _MutationScreenState extends State<MutationScreen> {
           Navigator.pop(context, true); // Kembali & Refresh
         }
       } catch (e) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.toString().replaceAll("Exception:", "")), backgroundColor: Colors.red),
         );

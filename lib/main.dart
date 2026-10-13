@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/date_symbol_data_local.dart'; 
 
-// Import halaman
-import 'presentation/stock_list_screen.dart';
-import 'presentation/add_product_screen.dart'; 
-import 'presentation/dashboard_screen.dart'; // Pastikan dashboard di-import
+import 'presentation/dashboard_screen.dart';
 
 
 Future<void> main() async {
@@ -23,7 +21,13 @@ Future<void> main() async {
   // Kita "daftarkan" dulu format tanggal Indonesia agar aplikasi tidak kaget
   await initializeDateFormatting('id_ID', null);
 
-  runApp(const MyApp());
+  runApp(
+    ProviderScope(
+      // Tanpa retry otomatis: error langsung tampil dengan tombol "Coba lagi"
+      retry: (retryCount, error) => null,
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {

@@ -1,68 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../data/product_service.dart';
-import '../data/transaction_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/providers.dart';
 import 'stock_list_screen.dart';
 import 'cashier_screen.dart';
 import 'add_product_screen.dart';
 import 'history_screen.dart';
+import 'widgets/error_view.dart';
 
-class DashboardScreen extends StatefulWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
-  final _transService = TransactionService();
-  final _prodService = ProductService();
-
-  double _todayRevenue = 0;
-  int _lowStockCount = 0;
-  bool _isLoading = true;
-
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   // Formatter Rupiah
   final _currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
-  @override
-  void initState() {
-    super.initState();
-    _loadDashboardData();
-  }
-
   // Fungsi untuk menyegarkan data Dashboard
-  Future<void> _loadDashboardData() async {
-    setState(() => _isLoading = true);
-    
-    // 1. Hitung Omzet Hari Ini
-    final transactions = await _transService.getTodayTransactions();
-    double total = 0;
-    for (var t in transactions) {
-      total += (t['total_amount'] as num).toDouble();
-    }
-
-    // 2. Hitung Stok Menipis (Logic: Qty <= MinStock)
-    final stocks = await _prodService.getStockList();
-    int lowCount = 0;
-    for (var s in stocks) {
-      final qty = (s['quantity'] as num).toDouble();
-      final min = (s['products']['min_stock'] as num).toDouble();
-      if (qty <= min) lowCount++;
-    }
-
-    if (mounted) {
-      setState(() {
-        _todayRevenue = total;
-        _lowStockCount = lowCount;
-        _isLoading = false;
-      });
-    }
-  }
+  void _loadDashboardData() => ref.invalidate(dashboardSummaryProvider);
 
   @override
   Widget build(BuildContext context) {
+    final summary = ref.watch(dashboardSummaryProvider);
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
@@ -76,9 +39,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
           )
         ],
       ),
-      body: _isLoading 
-        ? const Center(child: CircularProgressIndicator())
-        : SingleChildScrollView(
+      body: summary.when(
+        skipLoadingOnRefresh: false,
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => ErrorView(error: error, onRetry: _loadDashboardData),
+        data: (data) => _buildContent(data),
+      ),
+    );
+  }
+
+  Widget _buildContent(DashboardSummary data) {
+    return SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,7 +68,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(colors: [Color(0xFF1565C0), Color(0xFF42A5F5)]),
                     borderRadius: BorderRadius.circular(15),
-                    boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))],
+                    boxShadow: [BoxShadow(color: Colors.blue.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 5))],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -105,14 +76,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const Text("Pendapatan Hari Ini", style: TextStyle(color: Colors.white70, fontSize: 14)),
                       const SizedBox(height: 5),
                       Text(
-                        _currency.format(_todayRevenue),
+                        _currency.format(data.todayRevenue),
                         style: GoogleFonts.poppins(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
                       const SizedBox(height: 10),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(20)),
-                        child: Text("${DateFormat('EEEE, d MMMM yyyy', 'id_ID').format(DateTime.now())}", 
+                        child: Text(DateFormat('EEEE, d MMMM yyyy', 'id_ID').format(DateTime.now()), 
                           style: const TextStyle(color: Colors.white, fontSize: 12)),
                       )
                     ],
@@ -122,7 +93,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(height: 20),
 
                 // PERINGATAN STOK
-                if (_lowStockCount > 0)
+                if (data.lowStockCount > 0)
                   Container(
                     margin: const EdgeInsets.only(bottom: 20),
                     padding: const EdgeInsets.all(15),
@@ -139,7 +110,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text("Perhatian!", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
-                            Text("Ada $_lowStockCount barang stoknya menipis.", style: TextStyle(color: Colors.orange[800])),
+                            Text("Ada ${data.lowStockCount} barang stoknya menipis.", style: TextStyle(color: Colors.orange[800])),
                           ],
                         )
                       ],
@@ -188,8 +159,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ],
             ),
-          ),
-    );
+          );
   }
 
   Widget _buildMenuCard({required String title, required IconData icon, required Color color, required VoidCallback onTap}) {
@@ -200,14 +170,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(15),
-          boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 5, offset: const Offset(0, 3))],
+          boxShadow: [BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 5, offset: const Offset(0, 3))],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
               padding: const EdgeInsets.all(15),
-              decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
               child: Icon(icon, size: 35, color: color),
             ),
             const SizedBox(height: 15),

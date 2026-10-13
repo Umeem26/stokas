@@ -1,21 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; // Untuk format Rupiah
-import '../data/product_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/providers.dart';
 import 'add_product_screen.dart';
 import 'mutation_screen.dart';
 import 'cashier_screen.dart';
 import 'edit_product_screen.dart';
+import 'widgets/error_view.dart';
 
-class StockListScreen extends StatefulWidget {
+class StockListScreen extends ConsumerStatefulWidget {
   const StockListScreen({super.key});
 
   @override
-  State<StockListScreen> createState() => _StockListScreenState();
+  ConsumerState<StockListScreen> createState() => _StockListScreenState();
 }
 
-class _StockListScreenState extends State<StockListScreen> {
-  final _service = ProductService();
-  
+class _StockListScreenState extends ConsumerState<StockListScreen> {
+  void _refresh() => ref.invalidate(stockListProvider);
+
   // Formatter Rupiah
   final _currency = NumberFormat.currency(
     locale: 'id_ID', 
@@ -36,21 +38,20 @@ class _StockListScreenState extends State<StockListScreen> {
                 context,
                 MaterialPageRoute(builder: (context) => const CashierScreen()),
               ).then((value) {
-                // INI KUNCINYA: Saat kembali, paksa refresh UI
-                setState(() {}); 
+                // INI KUNCINYA: Saat kembali, paksa refresh data
+                _refresh();
               });
             },
           ),
           const SizedBox(width: 10),
         ],
       ),
-      body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _service.getStockList(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+      body: ref.watch(stockListProvider).when(
+        skipLoadingOnRefresh: false,
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => ErrorView(error: error, onRetry: _refresh),
+        data: (stocks) {
+          if (stocks.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -65,9 +66,9 @@ class _StockListScreenState extends State<StockListScreen> {
 
           return ListView.builder(
             padding: const EdgeInsets.all(12),
-            itemCount: snapshot.data!.length,
+            itemCount: stocks.length,
             itemBuilder: (context, index) {
-              final stock = snapshot.data![index];
+              final stock = stocks[index];
               final product = stock['products'];
               final price = product['price'] ?? 0; // Ambil harga
               
@@ -153,7 +154,7 @@ class _StockListScreenState extends State<StockListScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(builder: (context) => MutationScreen(sourceStock: stock)),
-                              ).then((value) { if (value == true) setState(() {}); });
+                              ).then((value) { if (value == true) _refresh(); });
                             },
                           ),
                           
@@ -170,7 +171,7 @@ class _StockListScreenState extends State<StockListScreen> {
                                 ),
                               ).then((value) {
                                 // Refresh jika ada perubahan (Update/Hapus)
-                                if (value == true) setState(() {});
+                                if (value == true) _refresh();
                               });
                             },
                           ),
@@ -192,7 +193,7 @@ class _StockListScreenState extends State<StockListScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const AddProductScreen()),
-          ).then((value) => setState(() {}));
+          ).then((value) => _refresh());
         },
       ),
     );

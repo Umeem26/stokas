@@ -3,19 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart'; // Plugin Foto
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/product_model.dart';
-import '../data/product_service.dart';
+import '../data/providers.dart';
 
-class AddProductScreen extends StatefulWidget {
+class AddProductScreen extends ConsumerStatefulWidget {
   const AddProductScreen({super.key});
 
   @override
-  State<AddProductScreen> createState() => _AddProductScreenState();
+  ConsumerState<AddProductScreen> createState() => _AddProductScreenState();
 }
 
-class _AddProductScreenState extends State<AddProductScreen> {
+class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _service = ProductService();
   final _picker = ImagePicker(); // Inisialisasi Picker
 
   final _idController = TextEditingController();
@@ -31,19 +31,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   DateTime? _selectedExpiry;
   File? _imageFile; // Variabel penampung foto sementara
 
-  List<Map<String, dynamic>> _categories = [];
   bool _isUploading = false; // Loading indicator saat upload
-
-  @override
-  void initState() {
-    super.initState();
-    _loadCategories();
-  }
-
-  void _loadCategories() async {
-    final data = await _service.getCategories();
-    if (mounted) setState(() => _categories = data);
-  }
 
   // --- FUNGSI PILIH FOTO ---
   Future<void> _pickImage(ImageSource source) async {
@@ -55,7 +43,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         });
       }
     } catch (e) {
-      print("Error Foto: $e");
+      debugPrint("Error Foto: $e");
     }
   }
 
@@ -92,12 +80,13 @@ class _AddProductScreenState extends State<AddProductScreen> {
     if (_formKey.currentState!.validate() && _selectedCategory != null) {
       setState(() => _isUploading = true); // Mulai Loading
 
+      final service = ref.read(productRepositoryProvider);
       try {
         String? imageUrl;
         
         // 1. Jika ada foto, upload dulu
         if (_imageFile != null) {
-          imageUrl = await _service.uploadImage(_imageFile!);
+          imageUrl = await service.uploadImage(_imageFile!);
         }
 
         final cleanPrice = _priceController.text.replaceAll('.', '');
@@ -114,7 +103,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         );
 
         // 2. Simpan Data Produk (termasuk URL foto)
-        await _service.addProduct(
+        await service.addProduct(
           product, 
           _selectedFloor, 
           double.parse(_qtyController.text), 
@@ -261,10 +250,22 @@ class _AddProductScreenState extends State<AddProductScreen> {
   }
 
   Widget _buildCategoryDropdown() {
+    final categories = ref.watch(categoriesProvider);
+    if (categories.hasError) {
+      return InputDecorator(
+        decoration: InputDecoration(labelText: "Kategori", errorText: categories.error.toString()),
+        child: TextButton.icon(
+          onPressed: () => ref.invalidate(categoriesProvider),
+          icon: const Icon(Icons.refresh),
+          label: const Text("Coba lagi"),
+        ),
+      );
+    }
+    final items = categories.value ?? const <Map<String, dynamic>>[];
     return DropdownButtonFormField<String>(
       decoration: const InputDecoration(labelText: "Kategori"),
-      value: _selectedCategory,
-      items: _categories.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name']))).toList(),
+      initialValue: _selectedCategory,
+      items: items.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name']))).toList(),
       onChanged: (v) => setState(() => _selectedCategory = v),
     );
   }
@@ -272,7 +273,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   Widget _buildUnitDropdown() {
     return DropdownButtonFormField<String>(
       decoration: const InputDecoration(labelText: "Satuan"),
-      value: _selectedUnit,
+      initialValue: _selectedUnit,
       items: ['pcs', 'gram', 'liter', 'ml'].map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
       onChanged: (v) => setState(() => _selectedUnit = v!),
     );
@@ -281,7 +282,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   Widget _buildFloorDropdown() {
     return DropdownButtonFormField<String>(
       decoration: const InputDecoration(labelText: "Lokasi"),
-      value: _selectedFloor,
+      initialValue: _selectedFloor,
       items: ['Lantai 1', 'Lantai 2'].map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
       onChanged: (v) => setState(() => _selectedFloor = v!),
     );

@@ -1,28 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../data/product_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/cart_calculator.dart';
+import '../data/providers.dart';
 import '../data/transaction_model.dart';
-import '../data/transaction_service.dart';
 import 'add_product_screen.dart'; // Untuk pinjam formatter uang
-import 'package:google_fonts/google_fonts.dart'; // <--- TAMBAHKAN INI
+import 'package:google_fonts/google_fonts.dart';
+import 'widgets/error_view.dart';
 
-class CashierScreen extends StatefulWidget {
+class CashierScreen extends ConsumerStatefulWidget {
   const CashierScreen({super.key});
 
   @override
-  State<CashierScreen> createState() => _CashierScreenState();
+  ConsumerState<CashierScreen> createState() => _CashierScreenState();
 }
 
-class _CashierScreenState extends State<CashierScreen> {
-  final _productService = ProductService();
-  final _transactionService = TransactionService();
+class _CashierScreenState extends ConsumerState<CashierScreen> {
   final _searchController = TextEditingController();
   final _payController = TextEditingController();
 
   // Data
   List<Map<String, dynamic>> _allProducts = []; // Semua barang
   List<Map<String, dynamic>> _filteredProducts = []; // Hasil pencarian
-  List<CartItem> _cart = []; // Keranjang Belanja
+  final List<CartItem> _cart = []; // Keranjang Belanja
+  Object? _loadError; // Terisi jika daftar barang gagal dimuat
 
   // Format Rupiah
   final _currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
@@ -35,11 +36,19 @@ class _CashierScreenState extends State<CashierScreen> {
 
   // Ambil data produk untuk dipilih kasir
   void _loadProducts() async {
-    final data = await _productService.getStockList();
+    final List<Map<String, dynamic>> data;
+    try {
+      data = await ref.read(stockRepositoryProvider).getStockList();
+    } catch (e) {
+      if (mounted) setState(() => _loadError = e);
+      return;
+    }
+    if (!mounted) return;
     // Kita filter hanya ambil data produknya saja (unik berdasarkan ID produk)
     // Karena stok list menampilkan per lantai, kita ambil salah satu saja untuk master harga
     // (Logic sederhananya: ambil semua stok yang ada)
     setState(() {
+      _loadError = null;
       _allProducts = data;
       _filteredProducts = data;
     });
@@ -83,7 +92,7 @@ class _CashierScreenState extends State<CashierScreen> {
   }
 
   // Hitung Total Belanja
-  double get _totalAmount => _cart.fold(0, (sum, item) => sum + item.subtotal);
+  double get _totalAmount => calculateTotal(_cart);
 
   // Proses Bayar
   void _processPayment() async {
@@ -103,11 +112,11 @@ class _CashierScreenState extends State<CashierScreen> {
       final transaction = TransactionModel(
         totalAmount: total,
         paidAmount: paid,
-        changeAmount: paid - total,
+        changeAmount: calculateChange(total: total, paid: paid),
         items: _cart,
       );
 
-      final transactionId = await _transactionService.saveTransaction(transaction);
+      final transactionId = await ref.read(transactionRepositoryProvider).saveTransaction(transaction);
 
       if (mounted) {
         showDialog(
@@ -172,7 +181,7 @@ class _CashierScreenState extends State<CashierScreen> {
                   _buildReceiptRow("TOTAL", total, isBold: true),
                   _buildReceiptRow("BAYAR", paid),
                   const SizedBox(height: 5),
-                  _buildReceiptRow("KEMBALI", paid - total, isBold: true, color: Colors.green),
+                  _buildReceiptRow("KEMBALI", calculateChange(total: total, paid: paid), isBold: true, color: Colors.green),
 
                   const SizedBox(height: 25),
                   const Text("Terima Kasih!", style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
@@ -200,6 +209,7 @@ class _CashierScreenState extends State<CashierScreen> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
     }
   }
@@ -245,7 +255,9 @@ class _CashierScreenState extends State<CashierScreen> {
           // 2. Daftar Barang (Hasil Pencarian)
           Expanded(
             flex: 2,
-            child: ListView.separated(
+            child: _loadError != null
+                ? ErrorView(error: _loadError!, onRetry: _loadProducts)
+                : ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               itemCount: _filteredProducts.length,
               separatorBuilder: (c, i) => const Divider(height: 1),

@@ -1,23 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../data/transaction_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/providers.dart';
+import 'widgets/error_view.dart';
 
-class HistoryScreen extends StatefulWidget {
+class HistoryScreen extends ConsumerStatefulWidget {
   const HistoryScreen({super.key});
 
   @override
-  State<HistoryScreen> createState() => _HistoryScreenState();
+  ConsumerState<HistoryScreen> createState() => _HistoryScreenState();
 }
 
-class _HistoryScreenState extends State<HistoryScreen> {
-  final _service = TransactionService();
+class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   final _currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
   // Fungsi untuk Membuka Detail Nota
   void _showDetail(Map<String, dynamic> transaction) async {
     // 1. Ambil detail barang dari database
-    final items = await _service.getTransactionItems(transaction['id']);
+    final List<Map<String, dynamic>> items;
+    try {
+      items = await ref.read(transactionRepositoryProvider).getTransactionItems(transaction['id']);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e"), backgroundColor: Colors.red));
+      return;
+    }
 
     if (!mounted) return;
 
@@ -79,17 +87,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Riwayat Transaksi")),
-      body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _service.getTransactionHistory(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+      body: ref.watch(transactionHistoryProvider).when(
+        skipLoadingOnRefresh: false,
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => ErrorView(error: error, onRetry: () => ref.invalidate(transactionHistoryProvider)),
+        data: (data) {
+          if (data.isEmpty) {
             return const Center(child: Text("Belum ada transaksi"));
           }
 
-          final data = snapshot.data!;
           return ListView.separated(
             padding: const EdgeInsets.all(10),
             itemCount: data.length,

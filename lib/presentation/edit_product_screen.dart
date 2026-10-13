@@ -1,22 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/product_model.dart';
-import '../data/product_service.dart';
+import '../data/providers.dart';
 import 'add_product_screen.dart'; // Pinjam Formatter Rupiah
 
-class EditProductScreen extends StatefulWidget {
+class EditProductScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> productData; // Data barang yang mau diedit
 
   const EditProductScreen({super.key, required this.productData});
 
   @override
-  State<EditProductScreen> createState() => _EditProductScreenState();
+  ConsumerState<EditProductScreen> createState() => _EditProductScreenState();
 }
 
-class _EditProductScreenState extends State<EditProductScreen> {
+class _EditProductScreenState extends ConsumerState<EditProductScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _service = ProductService();
 
   // Controller
   late TextEditingController _idController;
@@ -27,7 +26,6 @@ class _EditProductScreenState extends State<EditProductScreen> {
   
   String? _selectedCategory;
   String? _selectedUnit;
-  List<Map<String, dynamic>> _categories = [];
 
   @override
   void initState() {
@@ -47,13 +45,6 @@ class _EditProductScreenState extends State<EditProductScreen> {
 
     _selectedCategory = p['category_id'].toString();
     _selectedUnit = p['unit_type'];
-
-    _loadCategories();
-  }
-
-  void _loadCategories() async {
-    final data = await _service.getCategories();
-    if (mounted) setState(() => _categories = data);
   }
 
   // Fungsi Update
@@ -74,13 +65,14 @@ class _EditProductScreenState extends State<EditProductScreen> {
           capitalPrice: double.parse(cleanCapital),
         );
 
-        await _service.updateProduct(product);
+        await ref.read(productRepositoryProvider).updateProduct(product);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Data Berhasil Diperbarui!")));
           Navigator.pop(context, true); // Kembali & Refresh
         }
       } catch (e) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
       }
     }
@@ -100,12 +92,13 @@ class _EditProductScreenState extends State<EditProductScreen> {
             onPressed: () async {
               Navigator.pop(ctx); // Tutup dialog
               try {
-                await _service.deleteProduct(_idController.text);
+                await ref.read(productRepositoryProvider).deleteProduct(_idController.text);
                 if (mounted) {
                   Navigator.pop(context, true); // Kembali ke Home & Refresh
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("🗑️ Barang Dihapus")));
                 }
               } catch (e) {
+                if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal Hapus: $e")));
               }
             }, 
@@ -199,10 +192,22 @@ class _EditProductScreenState extends State<EditProductScreen> {
   }
 
   Widget _buildCategoryDropdown() {
+    final categories = ref.watch(categoriesProvider);
+    if (categories.hasError) {
+      return InputDecorator(
+        decoration: InputDecoration(labelText: "Kategori", errorText: categories.error.toString()),
+        child: TextButton.icon(
+          onPressed: () => ref.invalidate(categoriesProvider),
+          icon: const Icon(Icons.refresh),
+          label: const Text("Coba lagi"),
+        ),
+      );
+    }
+    final items = categories.value ?? const <Map<String, dynamic>>[];
     return DropdownButtonFormField<String>(
       decoration: const InputDecoration(labelText: "Kategori"),
-      value: _selectedCategory,
-      items: _categories.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name']))).toList(),
+      initialValue: _selectedCategory,
+      items: items.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name']))).toList(),
       onChanged: (v) => setState(() => _selectedCategory = v),
     );
   }
@@ -210,7 +215,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
   Widget _buildUnitDropdown() {
     return DropdownButtonFormField<String>(
       decoration: const InputDecoration(labelText: "Satuan"),
-      value: _selectedUnit,
+      initialValue: _selectedUnit,
       items: ['pcs', 'gram', 'liter', 'ml'].map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
       onChanged: (v) => setState(() => _selectedUnit = v!),
     );
