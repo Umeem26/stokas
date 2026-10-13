@@ -73,6 +73,19 @@ class CheckoutController extends Notifier<CheckoutState> {
     _setItems(items);
   }
 
+  /// Buang satu baris keranjang.
+  void remove(String productId) {
+    if (state.isPaying) return;
+    final items = state.items.where((i) => i.productId != productId).toList();
+    if (items.length != state.items.length) _setItems(items);
+  }
+
+  /// Kosongkan keranjang (UI wajib meminta konfirmasi dulu).
+  void clear() {
+    if (state.isPaying || state.items.isEmpty) return;
+    _setItems(const []);
+  }
+
   /// Bayar dengan uang [paid] (Rupiah). Sukses: keranjang dikosongkan & kunci baru.
   /// Gagal: keranjang dan kunci tetap, sehingga percobaan ulang aman. Panggilan saat
   /// pembayaran masih berjalan (tap ganda) mengembalikan null tanpa memanggil server.

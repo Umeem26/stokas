@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../core/app_exception.dart';
 import '../core/format.dart';
 import '../data/checkout_controller.dart';
-import '../data/stock_availability.dart';
 import '../data/providers.dart';
+import '../data/stock_availability.dart';
 import '../data/transaction_model.dart';
-import 'add_product_screen.dart'; // Untuk pinjam formatter uang
-import 'package:google_fonts/google_fonts.dart';
+import 'app_shell.dart' show railBreakpoint;
+import 'cashier/cashier_widgets.dart';
+import 'design/stokas_button.dart';
+import 'design/stokas_tokens.dart';
 import 'widgets/account_menu_button.dart';
 import 'widgets/error_view.dart';
-import 'design/stokas_tokens.dart';
 
+/// Layar Kasir. Lebar >= 768: dua panel (produk | keranjang 408 px).
+/// Di bawahnya satu kolom dengan bilah "Keranjang (n) · Rp ..." yang membuka keranjang layar penuh.
+/// Keranjang ada di [checkoutControllerProvider], jadi tidak hilang saat muat ulang/bayar gagal.
 class CashierScreen extends ConsumerStatefulWidget {
   const CashierScreen({super.key});
 
@@ -22,12 +26,15 @@ class CashierScreen extends ConsumerStatefulWidget {
 
 class _CashierScreenState extends ConsumerState<CashierScreen> {
   final _searchController = TextEditingController();
-  final _payController = TextEditingController();
+  final _searchFocus = FocusNode();
 
-  // Data
-  List<SellableProduct> _allProducts = []; // Semua barang (stok tersedia = batch belum kedaluwarsa)
-  List<SellableProduct> _filteredProducts = []; // Hasil pencarian
-  Object? _loadError; // Terisi jika daftar barang gagal dimuat
+  List<SellableProduct> _allProducts = []; // stok tersedia = batch belum kedaluwarsa
+  bool _loading = true;
+  Object? _loadError; // terisi jika daftar barang gagal dimuat
+  String _query = '';
+  String? _category; // null = Semua
+
+  bool get _wide => MediaQuery.sizeOf(context).width >= railBreakpoint;
 
   @override
   void initState() {
@@ -38,60 +45,115 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
   @override
   void dispose() {
     _searchController.dispose();
-    _payController.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
-  // Ambil data stok lalu kelompokkan per barang untuk dipilih kasir
   Future<void> _loadProducts() async {
+    if (_loadError != null) setState(() => _loading = true);
     final List<Map<String, dynamic>> data;
     try {
       data = await ref.read(stockRepositoryProvider).getStockList();
     } catch (e) {
-      if (mounted) setState(() => _loadError = e);
+      if (mounted) {
+        setState(() {
+          _loadError = e;
+          _loading = false;
+        });
+      }
       return;
     }
     if (!mounted) return;
     setState(() {
       _loadError = null;
+      _loading = false;
       _allProducts = sellableProducts(data, ref.read(clockProvider)());
     });
-    _runFilter(_searchController.text);
   }
 
-  // Cari Barang
-  void _runFilter(String keyword) {
-    final k = keyword.toLowerCase();
-    setState(() {
-      _filteredProducts = k.isEmpty
-          ? _allProducts
-          : _allProducts.where((p) => p.name.toLowerCase().contains(k) || p.id.toLowerCase().contains(k)).toList();
-    });
+  static String? _categoryOf(SellableProduct p) => (p.product['categories'] as Map?)?['name'] as String?;
+
+  List<String> get _categories => {for (final p in _allProducts) ?_categoryOf(p)}.toList()..sort();
+
+  List<SellableProduct> get _visible {
+    final k = _query.trim().toLowerCase();
+    return _allProducts
+        .where((p) => _category == null || _categoryOf(p) == _category)
+        .where((p) => k.isEmpty || p.name.toLowerCase().contains(k) || p.id.toLowerCase().contains(k))
+        .toList();
   }
 
-  void _showMessage(String message, {Color? color}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
+  void _showMessage(String message, {bool error = false}) {
+    final c = context.stokas;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Row(
+          children: [
+            Icon(error ? Icons.error_outline : Icons.info_outline, color: c.canvas),
+            const SizedBox(width: StokasSpace.s2),
+            Expanded(child: Text(message)),
+          ],
+        ),
+      ));
   }
 
-  // Tambah ke Keranjang (dibatasi stok tersedia; server tetap sumber kebenaran)
+  /// Di tablet/PC kolom cari selalu fokus (scanner USB = keyboard).
+  void _refocusSearch() {
+    if (mounted && _wide) _searchFocus.requestFocus();
+  }
+
+  /// Tambah 1; ditolak bila habis atau melebihi stok tersedia (server tetap sumber kebenaran).
   void _addToCart(SellableProduct product) {
-    final error = ref.read(checkoutControllerProvider.notifier).add(product);
-    if (error != null) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      _showMessage(error, color: Colors.orange);
-    }
-  }
-
-  // Proses Bayar
-  void _processPayment() async {
-    final checkout = ref.read(checkoutControllerProvider);
-    if (checkout.isPaying || _payController.text.isEmpty) return;
-
-    final paid = parseRupiah(_payController.text);
-    if (paid < checkout.total) {
-      _showMessage("⚠️ Uang Pembayaran Kurang!", color: Colors.red);
+    if (product.available <= 0) {
+      _showMessage('${product.name} habis', error: true);
       return;
     }
+    final error = ref.read(checkoutControllerProvider.notifier).add(product);
+    if (error != null) _showMessage('${product.name}: $error', error: true);
+  }
+
+  void _increment(String productId) {
+    final product = _allProducts.where((p) => p.id == productId).firstOrNull;
+    if (product == null) {
+      _showMessage('Barang tidak ditemukan di daftar stok', error: true);
+      return;
+    }
+    _addToCart(product);
+  }
+
+  /// Enter di kolom cari (scan): `products.id` persis dulu, baru nama.
+  void _submitSearch(String text) {
+    if (text.trim().isEmpty) {
+      _refocusSearch();
+      return;
+    }
+    final match = findScanMatch(_allProducts, text);
+    if (match != null) {
+      _addToCart(match);
+      _searchController.clear();
+      setState(() => _query = '');
+    } else if (_visible.isNotEmpty) {
+      _showMessage('Ada beberapa barang yang cocok, pilih dari daftar');
+    } else {
+      _showMessage('Barang tidak ditemukan', error: true);
+    }
+    _searchFocus.requestFocus();
+  }
+
+  Future<void> _clearCart() async {
+    final lines = ref.read(checkoutControllerProvider).items.length;
+    if (await confirmClearCart(context, lines)) ref.read(checkoutControllerProvider.notifier).clear();
+    _refocusSearch();
+  }
+
+  /// Alur bayar sementara (isian uang tunai). Gagal: keranjang & kunci transaksi tetap,
+  /// jadi bayar ulang aman. True bila transaksi tersimpan.
+  Future<bool> _pay() async {
+    final checkout = ref.read(checkoutControllerProvider);
+    if (checkout.isPaying || checkout.items.isEmpty) return false;
+    final paid = await showPayDialog(context, checkout.total);
+    if (paid == null || !mounted) return false;
 
     final TransactionModel? transaction;
     try {
@@ -99,263 +161,200 @@ class _CashierScreenState extends ConsumerState<CashierScreen> {
     } on InsufficientStockException catch (e) {
       // Stok berubah sejak dimuat: muat ulang agar angka stok di layar benar.
       await _loadProducts();
-      if (mounted) _showMessage("${e.message}. Stok sudah dimuat ulang, sesuaikan keranjang.", color: Colors.red);
-      return;
+      if (mounted) _showMessage('${e.message}. Stok sudah dimuat ulang, sesuaikan keranjang.', error: true);
+      return false;
     } catch (e) {
-      // Keranjang & kunci transaksi tetap: tekan Bayar lagi aman (tidak tercatat ganda).
-      if (mounted) _showMessage("$e", color: Colors.red);
-      return;
+      if (mounted) _showMessage('$e', error: true);
+      return false;
     }
-    if (transaction == null || !mounted) return;
+    if (transaction == null || !mounted) return false;
 
-    _payController.clear();
     _loadProducts();
-    _showReceipt(transaction);
+    await showReceiptDialog(context, transaction);
+    _refocusSearch();
+    return true;
   }
 
-  void _showReceipt(TransactionModel transaction) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Dialog(
-        backgroundColor: context.stokas.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          width: 350,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.check_circle, color: Colors.green, size: 50),
-              const SizedBox(height: 10),
-              const Text("TRANSAKSI SUKSES", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-              const SizedBox(height: 5),
-
-              Text("Minimarket POS", style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 14)),
-              Text(DateFormat('dd-MM-yyyy HH:mm').format(transaction.createdAt.toLocal()), style: const TextStyle(color: Colors.grey, fontSize: 12)),
-              Text("NO. NOTA: #${transaction.id}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-
-              Divider(thickness: 2, height: 30, color: context.stokas.ink),
-
-              // Isi nota dari server (nama & harga snapshot transaksi)
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: transaction.items.length,
-                  itemBuilder: (context, index) {
-                    final item = transaction.items[index];
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            flex: 4,
-                            child: Text(
-                              "${item.productName}\n${formatQty(item.quantity)} x ${formatRupiah(item.price)}",
-                              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                            ),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: Text(
-                              formatRupiah(item.subtotal),
-                              textAlign: TextAlign.right,
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-
-              Divider(thickness: 2, height: 30, color: context.stokas.ink),
-
-              _buildReceiptRow("TOTAL", transaction.totalAmount, isBold: true),
-              _buildReceiptRow("BAYAR", transaction.paidAmount),
-              const SizedBox(height: 5),
-              _buildReceiptRow("KEMBALI", transaction.changeAmount, isBold: true, color: Colors.green),
-
-              const SizedBox(height: 25),
-              const Text("Terima Kasih!", style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
-              const SizedBox(height: 20),
-
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Tutup & Transaksi Baru", style: TextStyle(color: Colors.white)),
-                ),
-              )
-            ],
-          ),
-        ),
-      ),
+  Widget _cartPanel(CheckoutState checkout, {required VoidCallback onPay}) {
+    final notifier = ref.read(checkoutControllerProvider.notifier);
+    return CartPanel(
+      checkout: checkout,
+      onIncrement: _increment,
+      onDecrement: notifier.decrement,
+      onRemove: notifier.remove,
+      onPay: onPay,
+      onClear: _clearCart,
     );
   }
 
-  // Helper kecil buat baris angka struk
-  Widget _buildReceiptRow(String label, int value, {bool isBold = false, Color? color}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.normal, fontSize: 12)),
-          Text(formatRupiah(value), style: TextStyle(
-            fontWeight: isBold ? FontWeight.bold : FontWeight.normal, 
-            fontSize: isBold ? 14 : 12,
-            color: color ?? context.stokas.ink
-          )),
-        ],
-      ),
+  void _openCart() {
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => _CartPage(screen: this)));
+  }
+
+  Widget _buildProducts({required bool wide}) {
+    final c = context.stokas;
+    final categories = _categories;
+    final visible = _visible;
+
+    Widget grid;
+    if (_loadError != null) {
+      grid = ErrorView(error: _loadError!, onRetry: _loadProducts);
+    } else if (_loading) {
+      grid = const Center(child: CircularProgressIndicator());
+    } else if (visible.isEmpty) {
+      grid = Center(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search_off, color: c.inkMuted),
+            const SizedBox(width: StokasSpace.s2),
+            Text(_allProducts.isEmpty ? 'Belum ada barang' : 'Tidak ada barang yang cocok',
+                style: StokasType.bodyLg.copyWith(color: c.inkMuted)),
+          ],
+        ),
+      );
+    } else {
+      grid = LayoutBuilder(
+        builder: (context, constraints) => GridView.builder(
+          padding: const EdgeInsets.all(StokasSpace.s4),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            // 3 kolom di dua panel; panel yang sempit (dan HP) 2 kolom agar kartu tetap terbaca.
+            crossAxisCount: wide && constraints.maxWidth >= 480 ? 3 : 2,
+            mainAxisExtent: 148,
+            crossAxisSpacing: StokasSpace.s3,
+            mainAxisSpacing: StokasSpace.s3,
+          ),
+          itemCount: visible.length,
+          itemBuilder: (context, i) => ProductCard(
+            product: visible[i],
+            onAdd: () {
+              _addToCart(visible[i]);
+              _refocusSearch();
+            },
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(StokasSpace.s4, StokasSpace.s4, StokasSpace.s4, StokasSpace.s2),
+          child: TextField(
+            key: const Key('cashier-search'),
+            controller: _searchController,
+            focusNode: _searchFocus,
+            autofocus: wide,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              labelText: 'Cari nama atau scan kode',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _query.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Hapus pencarian',
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _query = '');
+                        _searchFocus.requestFocus();
+                      },
+                    ),
+            ),
+            onChanged: (v) => setState(() => _query = v),
+            onSubmitted: _submitSearch,
+          ),
+        ),
+        if (categories.isNotEmpty)
+          SizedBox(
+            height: StokasSpace.tapMin + StokasSpace.s2,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: StokasSpace.s4),
+              children: [
+                for (final (label, value) in [('Semua', null), for (final k in categories) (k, k)])
+                  Padding(
+                    padding: const EdgeInsets.only(right: StokasSpace.s2),
+                    child: ChoiceChip(
+                      label: Text(label),
+                      selected: _category == value,
+                      materialTapTargetSize: MaterialTapTargetSize.padded,
+                      onSelected: (_) => setState(() => _category = value),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        Expanded(child: grid),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final checkout = ref.watch(checkoutControllerProvider);
-    final cart = checkout.items;
+    final c = context.stokas;
+    final wide = _wide;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Kasir"),
-        actions: [
-          const AccountMenuButton(),
-        ],
-      ),
-      body: Column(
-        children: [
-          // 1. Area Pencarian Barang
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                labelText: "Cari Nama Barang / Scan Barcode",
-                prefixIcon: Icon(Icons.search),
-                suffixIcon: Icon(Icons.qr_code_scanner),
-              ),
-              onChanged: _runFilter,
-            ),
-          ),
-
-          // 2. Daftar Barang (Hasil Pencarian)
-          Expanded(
-            flex: 2,
-            child: _loadError != null
-                ? ErrorView(error: _loadError!, onRetry: _loadProducts)
-                : ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              itemCount: _filteredProducts.length,
-              separatorBuilder: (c, i) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final item = _filteredProducts[index];
-                final floors = item.floors.isEmpty ? "-" : item.floors.join(", ");
-
-                return ListTile(
-                  tileColor: context.stokas.surface,
-                  leading: const Icon(Icons.local_offer, color: Colors.blue),
-                  title: Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text("$floors - Stok: ${formatQty(item.available)}"),
-                  trailing: Text(formatRupiah(item.price), style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                  onTap: () => _addToCart(item),
-                );
-              },
-            ),
-          ),
-
-          const Divider(thickness: 5, color: Colors.grey),
-
-          // 3. Keranjang Belanja (Cart)
-          Expanded(
-            flex: 3,
-            child: Container(
-              color: context.stokas.surfaceSunken,
-              child: Column(
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Text("KERANJANG BELANJA", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-                  ),
-                  Expanded(
-                    child: cart.isEmpty 
-                    ? const Center(child: Text("Keranjang Kosong", style: TextStyle(color: Colors.grey)))
-                    : ListView.builder(
-                        itemCount: cart.length,
-                        itemBuilder: (context, index) {
-                          final cartItem = cart[index];
-                          return ListTile(
-                            dense: true,
-                            title: Text(cartItem.productName),
-                            subtitle: Text("${formatQty(cartItem.quantity)} x ${formatRupiah(cartItem.price)}"),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(formatRupiah(cartItem.subtotal), style: const TextStyle(fontWeight: FontWeight.bold)),
-                                IconButton(
-                                  icon: const Icon(Icons.remove_circle, color: Colors.red),
-                                  onPressed: checkout.isPaying
-                                      ? null
-                                      : () => ref.read(checkoutControllerProvider.notifier).decrement(cartItem.productId),
-                                )
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // 4. Panel Pembayaran
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: context.stokas.surface,
-              boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: const Offset(0, -5))],
-            ),
-            child: Column(
+      appBar: AppBar(title: const Text('Kasir'), actions: const [AccountMenuButton()]),
+      body: wide
+          ? Row(
+              key: const Key('cashier-two-panel'),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text("TOTAL:", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    Text(formatRupiah(checkout.total), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blue)),
-                  ],
-                ),
-                const SizedBox(height: 15),
-                TextField(
-                  controller: _payController,
-                  keyboardType: TextInputType.number,
-                  // Menggunakan Formatter yang sama dengan AddProductScreen agar ada titik otomatis
-                  inputFormatters: [CurrencyInputFormatter()], 
-                  decoration: const InputDecoration(
-                    labelText: "Uang Diterima (Tunai)",
-                    prefixIcon: Icon(Icons.money),
-                    suffixText: "IDR",
-                  ),
-                ),
-                const SizedBox(height: 15),
+                Expanded(child: _buildProducts(wide: true)),
+                VerticalDivider(width: 1, color: c.line),
                 SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF6C00)),
-                    // Terkunci selama proses agar tidak tap ganda
-                    onPressed: cart.isEmpty || checkout.isPaying ? null : _processPayment,
-                    child: checkout.isPaying
-                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white))
-                        : const Text("BAYAR SEKARANG", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                  key: const Key('cashier-cart-panel'),
+                  width: cartPanelWidth,
+                  child: ColoredBox(color: c.surface, child: _cartPanel(checkout, onPay: _pay)),
+                ),
+              ],
+            )
+          : Column(
+              key: const Key('cashier-one-column'),
+              children: [
+                Expanded(child: _buildProducts(wide: false)),
+                DecoratedBox(
+                  decoration: BoxDecoration(color: c.surface, border: Border(top: BorderSide(color: c.line))),
+                  child: Padding(
+                    padding: const EdgeInsets.all(StokasSpace.s3),
+                    child: StokasButton(
+                      key: const Key('cart-bar'),
+                      label: 'Keranjang (${checkout.items.length}) · ${formatRupiah(checkout.total)}',
+                      icon: Icons.shopping_cart_outlined,
+                      expand: true,
+                      onPressed: _openCart,
+                    ),
                   ),
-                )
+                ),
               ],
             ),
-          )
-        ],
+    );
+  }
+}
+
+/// Keranjang layar penuh (HP). Memakai state & aksi layar Kasir; tertutup sendiri setelah bayar berhasil.
+class _CartPage extends ConsumerWidget {
+  final _CashierScreenState screen;
+
+  const _CartPage({required this.screen});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final checkout = ref.watch(checkoutControllerProvider);
+    return Scaffold(
+      key: const Key('cart-page'),
+      appBar: AppBar(title: const Text('Keranjang')),
+      body: SafeArea(
+        child: screen._cartPanel(
+          checkout,
+          onPay: () async {
+            if (await screen._pay() && context.mounted) Navigator.pop(context);
+          },
+        ),
       ),
     );
   }

@@ -118,10 +118,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(stock.loads, 1);
 
-    await tester.tap(find.text('Barang A'));
+    await tester.tap(find.byKey(const ValueKey('product-A')));
     await tester.pump();
-    await tester.enterText(find.widgetWithText(TextField, 'Uang Diterima (Tunai)'), '10000');
-    await tester.tap(find.text('BAYAR SEKARANG'));
+    await tester.tap(find.byKey(const Key('pay-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('paid-field')), '10000');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('pay-confirm')));
     await tester.pumpAndSettle();
 
     expect(transactions.calls, hasLength(1));
@@ -137,13 +140,13 @@ void main() {
     ]);
     await pumpApp(tester, const CashierScreen(), role: AppRole.cashier, stock: stock);
     await tester.pumpAndSettle();
-    expect(find.text('Lantai 1 - Stok: 1'), findsOneWidget);
+    expect(find.text('Stok 1'), findsOneWidget);
 
-    await tester.tap(find.text('Barang A'));
+    await tester.tap(find.byKey(const ValueKey('product-A')));
     await tester.pump();
-    await tester.tap(find.text('Barang A').first);
+    await tester.tap(find.byKey(const ValueKey('product-A')));
     await tester.pump();
-    expect(find.text('Stok tersisa 1'), findsOneWidget);
+    expect(find.text('Barang A: Stok tersisa 1'), findsOneWidget);
   });
 
   group('Edit produk & harga modal (product_costs)', () {
