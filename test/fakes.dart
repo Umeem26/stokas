@@ -87,6 +87,15 @@ class FakeStockRepository implements StockRepository {
   /// Galat restock per product_id, dilempar sekali (setelah panggilan dicatat).
   final restockErrors = <String, Object>{};
 
+  /// Galat untuk panggilan yang catatannya diawali kunci (mis. 'opname A Lantai 2'), dilempar sekali.
+  final failures = <String, Object>{};
+
+  void _maybeFail(String call) {
+    for (final key in failures.keys.toList()) {
+      if (call.startsWith(key)) throw failures.remove(key)!;
+    }
+  }
+
   FakeStockRepository(this.rows);
 
   static String _d(DateTime? d) => d == null ? '-' : '${d.year}-${d.month}-${d.day}';
@@ -134,12 +143,14 @@ class FakeStockRepository implements StockRepository {
   @override
   Future<void> stockCount({required String productId, required String floor, DateTime? expiry, required num counted, String? note}) async {
     calls.add('opname $productId $floor ${_d(expiry)} $counted ${note ?? ''}'.trim());
+    _maybeFail(calls.last);
     _upsert(productId, floor, expiry)['quantity'] = counted;
   }
 
   @override
   Future<void> transferStock({required String productId, required String from, required String to, DateTime? expiry, required num qty}) async {
     calls.add('transfer $productId $from->$to ${_d(expiry)} $qty');
+    _maybeFail(calls.last);
     final src = _find(productId, from, expiry);
     if (src == null || (src['quantity'] as num) < qty) throw const AppException('Stok di lantai asal tidak cukup');
     src['quantity'] = (src['quantity'] as num) - qty;

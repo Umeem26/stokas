@@ -1,7 +1,7 @@
 class ProductModel {
   final String id;
   final String brandName;
-  final int categoryId;
+  final int? categoryId; // null = tanpa kategori
   final String unitType;
   final double minStock;
   final int price; // Harga jual (Rupiah). Harga modal ada di tabel product_costs (khusus owner).
@@ -9,7 +9,7 @@ class ProductModel {
   ProductModel({
     required this.id,
     required this.brandName,
-    required this.categoryId,
+    this.categoryId,
     required this.unitType,
     required this.minStock,
     required this.price,

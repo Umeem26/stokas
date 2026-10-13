@@ -44,7 +44,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
     _priceController = TextEditingController(text: CurrencyInputFormatter.format(price));
     _capitalPriceController = TextEditingController();
 
-    _selectedCategory = p['category_id'].toString();
+    _selectedCategory = p['category_id']?.toString(); // null = tanpa kategori
     _selectedUnit = p['unit_type'];
 
     // Harga modal ada di product_costs dan hanya terbaca oleh owner.
@@ -74,7 +74,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
         final product = ProductModel(
           id: _idController.text, // ID Tetap
           brandName: _nameController.text,
-          categoryId: int.parse(_selectedCategory!),
+          categoryId: _selectedCategory == null ? null : int.parse(_selectedCategory!),
           unitType: _selectedUnit!,
           minStock: double.parse(_minStockController.text),
           price: parseRupiah(_priceController.text),

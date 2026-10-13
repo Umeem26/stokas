@@ -18,11 +18,13 @@ import 'widgets/error_view.dart';
 import 'widgets/stock_adjust_dialog.dart';
 
 /// Daftar batch stok. Harga jual hanya untuk peran [Permission.viewPrices] (gudang tidak).
+/// [showAllProducts]: produk tanpa batch stok ikut tampil dengan lencana "Habis" (tab Produk).
 /// "Produk baru": owner ke form lengkap (harga, modal, foto); gudang ke [NewProductScreen] tanpa harga.
 class StockListScreen extends ConsumerStatefulWidget {
   final String title;
+  final bool showAllProducts;
 
-  const StockListScreen({super.key, this.title = 'Stok Toko (Real-time)'});
+  const StockListScreen({super.key, this.title = 'Stok Toko (Real-time)', this.showAllProducts = false});
 
   @override
   ConsumerState<StockListScreen> createState() => _StockListScreenState();
@@ -48,6 +50,7 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
   Widget build(BuildContext context) {
     final c = context.stokas;
     final role = ref.watch(currentRoleProvider);
+    final allProducts = widget.showAllProducts ? ref.watch(productListProvider).value ?? const <Map<String, dynamic>>[] : const <Map<String, dynamic>>[];
     return Scaffold(
       backgroundColor: c.canvas,
       appBar: AppBar(title: Text(widget.title), actions: const [AccountMenuButton(), SizedBox(width: StokasSpace.s2)]),
@@ -56,7 +59,9 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
             loading: () => const _StockSkeleton(),
             error: (error, _) => ErrorView(error: error, onRetry: _refresh),
             data: (stocks) {
-              if (stocks.isEmpty) {
+              final stocked = {for (final s in stocks) s['product_id']};
+              final noStock = allProducts.where((p) => !stocked.contains(p['id'])).toList();
+              if (stocks.isEmpty && noStock.isEmpty) {
                 return Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -71,9 +76,15 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
               final now = ref.read(clockProvider)();
               return ListView.separated(
                 padding: const EdgeInsets.fromLTRB(StokasSpace.s3, StokasSpace.s3, StokasSpace.s3, StokasSpace.s8 + StokasSpace.s8),
-                itemCount: stocks.length,
+                itemCount: stocks.length + noStock.length,
                 separatorBuilder: (_, _) => const SizedBox(height: StokasSpace.s2),
-                itemBuilder: (context, index) => _StockTile(
+                itemBuilder: (context, index) => index >= stocks.length
+                    ? _NoStockTile(
+                        product: noStock[index - stocks.length],
+                        role: role,
+                        onEdit: () => _open(EditProductScreen(productData: noStock[index - stocks.length])),
+                      )
+                    : _StockTile(
                   stock: stocks[index],
                   expired: isBatchExpired(stocks[index], now),
                   role: role,
@@ -159,6 +170,11 @@ class _StockTile extends StatelessWidget {
                   const Padding(
                     padding: EdgeInsets.only(top: StokasSpace.s1),
                     child: StatusBadge(StockStatus.bahaya),
+                  )
+                else if ((stock['quantity'] as num) <= 0)
+                  const Padding(
+                    padding: EdgeInsets.only(top: StokasSpace.s1),
+                    child: StatusBadge(StockStatus.bahaya, label: 'Habis'),
                   ),
               ],
             ),
@@ -190,6 +206,57 @@ class _StockTile extends StatelessWidget {
                   ),
               ],
             ),
+          if (can(role, Permission.editProduct))
+            IconButton(icon: Icon(Icons.edit_outlined, color: c.inkMuted), tooltip: 'Edit Barang', onPressed: onEdit),
+        ],
+      ),
+    );
+  }
+}
+
+/// Produk tanpa batch stok sama sekali: nama, kode, lencana "Habis".
+class _NoStockTile extends StatelessWidget {
+  final Map<String, dynamic> product;
+  final AppRole? role;
+  final VoidCallback onEdit;
+
+  const _NoStockTile({required this.product, required this.role, required this.onEdit});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.stokas;
+    return Container(
+      key: ValueKey('no-stock-${product['id']}'),
+      padding: const EdgeInsets.all(StokasSpace.s3),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(StokasRadius.lg),
+        border: Border.all(color: c.line),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: StokasSpace.s8 + StokasSpace.s3,
+            height: StokasSpace.s8 + StokasSpace.s3,
+            decoration: BoxDecoration(color: c.surfaceSunken, borderRadius: BorderRadius.circular(StokasRadius.md)),
+            child: Icon(Icons.inventory_2_outlined, color: c.inkMuted),
+          ),
+          const SizedBox(width: StokasSpace.s3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${product['brand_name']}', style: StokasType.title.copyWith(color: c.ink)),
+                if (can(role, Permission.viewPrices))
+                  MoneyText((product['price'] as num?)?.round() ?? 0, style: StokasType.body.copyWith(color: c.ink)),
+                Text('Kode ${product['id']} · ${product['unit_type'] ?? ''}', style: StokasType.caption.copyWith(color: c.inkMuted)),
+                const Padding(
+                  padding: EdgeInsets.only(top: StokasSpace.s1),
+                  child: StatusBadge(StockStatus.bahaya, label: 'Habis'),
+                ),
+              ],
+            ),
+          ),
           if (can(role, Permission.editProduct))
             IconButton(icon: Icon(Icons.edit_outlined, color: c.inkMuted), tooltip: 'Edit Barang', onPressed: onEdit),
         ],

@@ -13,10 +13,12 @@ abstract class StockRepository {
   /// tanpa kunci idempotensi: jaringan putus = [NetworkException], jangan ulang otomatis.
   Future<void> restock({required String productId, required String floor, DateTime? expiry, required num qty, String? note});
 
-  /// Opname: set batch menjadi hasil hitung fisik [counted].
+  /// Opname: set batch menjadi hasil hitung fisik [counted]. Satu batch per panggilan, tanpa
+  /// kunci idempotensi (nilai absolut; sama = tanpa perubahan). Jaringan putus = [NetworkException].
   Future<void> stockCount({required String productId, required String floor, DateTime? expiry, required num counted, String? note});
 
-  /// Pindahkan [qty] dari batch di lantai [from] ke lantai [to] (kedaluwarsa sama).
+  /// Pindahkan [qty] dari satu batch (produk, lantai [from], [expiry]) ke lantai [to] dengan
+  /// kedaluwarsa yang sama. Server tidak memeriksa kedaluwarsa. Tanpa kunci idempotensi.
   Future<void> transferStock({required String productId, required String from, required String to, DateTime? expiry, required num qty});
 }
 
@@ -55,7 +57,8 @@ class SupabaseStockRepository implements StockRepository {
 
   @override
   Future<void> stockCount({required String productId, required String floor, DateTime? expiry, required num counted, String? note}) {
-    return guard('Gagal menyimpan opname', () async {
+    const message = 'Gagal menyimpan opname';
+    return guard(message, () async {
       await _client.rpc('stock_count', params: {
         'p_product': productId,
         'p_floor': floor,
@@ -63,12 +66,13 @@ class SupabaseStockRepository implements StockRepository {
         'p_counted': counted,
         'p_note': _note(note),
       });
-    });
+    }, map: (e) => mapUncertainWriteError(message, e));
   }
 
   @override
   Future<void> transferStock({required String productId, required String from, required String to, DateTime? expiry, required num qty}) {
-    return guard('Gagal memindahkan stok', () async {
+    const message = 'Gagal memindahkan stok';
+    return guard(message, () async {
       await _client.rpc('transfer_stock', params: {
         'p_product': productId,
         'p_from': from,
@@ -76,6 +80,6 @@ class SupabaseStockRepository implements StockRepository {
         'p_expiry': expiry == null ? null : formatDateParam(expiry),
         'p_qty': qty,
       });
-    });
+    }, map: (e) => mapUncertainWriteError(message, e));
   }
 }

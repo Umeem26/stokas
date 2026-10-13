@@ -54,7 +54,7 @@ class NewProduct {
 abstract class ProductRepository {
   Future<List<Map<String, dynamic>>> getCategories();
 
-  /// Semua produk aktif (id, brand_name, unit_type), urut nama; termasuk yang belum punya stok.
+  /// Semua produk aktif (tanpa harga modal), urut nama; termasuk yang belum punya stok.
   Future<List<Map<String, dynamic>>> getProducts();
 
   /// Produk baru lewat RPC create_product_with_stock (tabel products tidak ditulis langsung).
@@ -93,7 +93,7 @@ class SupabaseProductRepository implements ProductRepository {
   @override
   Future<List<Map<String, dynamic>>> getProducts() {
     return guard('Gagal memuat daftar barang', () async {
-      final response = await _client.from('products').select('id, brand_name, unit_type').eq('is_deleted', false).order('brand_name');
+      final response = await _client.from('products').select('id, brand_name, unit_type, min_stock, category_id, price, image_url').eq('is_deleted', false).order('brand_name');
       return List<Map<String, dynamic>>.from(response);
     });
   }
