@@ -21,3 +21,5 @@ Pods/
 # OS-specific
 .DS_Store
 Thumbs.db
+# IDE (per-user)
+.idea/workspace.xml

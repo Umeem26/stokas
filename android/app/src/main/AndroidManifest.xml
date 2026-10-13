@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.minimarket_pos">
+    package="com.umem.minimarket_pos">
     
     <uses-permission android:name="android.permission.INTERNET"/>
 
