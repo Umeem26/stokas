@@ -71,6 +71,11 @@ void main() {
       });
     });
 
+    test('toMap tidak mengirim cashier_id (diisi default DB auth.uid())', () {
+      final t = TransactionModel(totalAmount: 1, paidAmount: 1, changeAmount: 0, items: const []);
+      expect(t.toMap().containsKey('cashier_id'), isFalse);
+    });
+
     test('CartItem default quantity 1 dan subtotal = harga x qty', () {
       final item = CartItem(productId: 'A1', productName: 'Gula', price: 3500);
       expect(item.quantity, 1);
