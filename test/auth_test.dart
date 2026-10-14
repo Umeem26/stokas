@@ -26,19 +26,23 @@ void main() {
     test('kredensial salah', () {
       final e = mapSignInError(const AuthException('Invalid login credentials', statusCode: '400', code: 'invalid_credentials'));
       expect(e.message, wrongCredentialsMessage);
+      expect(e.failure, SignInFailure.wrongCredentials);
     });
 
     test('jaringan putus', () {
       expect(mapSignInError(AuthRetryableFetchException()).message, networkErrorMessage);
+      expect(mapSignInError(AuthRetryableFetchException()).failure, SignInFailure.network);
     });
 
     test('akun diblokir (nonaktif)', () {
       final e = mapSignInError(const AuthException('User is banned', statusCode: '400', code: 'user_banned'));
       expect(e.message, inactiveAccountMessage);
+      expect(e.failure, SignInFailure.inactive);
     });
 
     test('error lain menjadi pesan generik', () {
       expect(mapSignInError(StateError('boom')).message, genericSignInMessage);
+      expect(mapSignInError(StateError('boom')).failure, SignInFailure.other);
     });
   });
 

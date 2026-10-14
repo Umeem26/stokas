@@ -24,6 +24,9 @@ class StokasButton extends StatefulWidget {
   final FocusNode? focusNode;
   final bool autofocus;
 
+  /// Sedang memproses: tombol nonaktif dan ikon diganti indikator putar.
+  final bool loading;
+
   const StokasButton({
     super.key,
     required this.label,
@@ -33,12 +36,13 @@ class StokasButton extends StatefulWidget {
     this.expand = false,
     this.focusNode,
     this.autofocus = false,
+    this.loading = false,
   });
 
-  const StokasButton.secondary({super.key, required this.label, required this.onPressed, this.icon, this.expand = false, this.focusNode, this.autofocus = false})
+  const StokasButton.secondary({super.key, required this.label, required this.onPressed, this.icon, this.expand = false, this.focusNode, this.autofocus = false, this.loading = false})
       : variant = StokasButtonVariant.secondary;
 
-  const StokasButton.danger({super.key, required this.label, required this.onPressed, this.icon, this.expand = false, this.focusNode, this.autofocus = false})
+  const StokasButton.danger({super.key, required this.label, required this.onPressed, this.icon, this.expand = false, this.focusNode, this.autofocus = false, this.loading = false})
       : variant = StokasButtonVariant.danger;
 
   @override
@@ -100,12 +104,20 @@ class _StokasButtonState extends State<StokasButton> {
   @override
   Widget build(BuildContext context) {
     final c = context.stokas;
-    final child = widget.icon == null
+    final onPressed = widget.loading ? null : widget.onPressed;
+    final leading = widget.loading
+        ? SizedBox.square(
+            key: const ValueKey('stokasButtonLoading'),
+            dimension: 20,
+            child: CircularProgressIndicator(strokeWidth: 2, color: c.inkMuted),
+          )
+        : (widget.icon == null ? null : Icon(widget.icon, size: 20));
+    final child = leading == null
         ? Text(widget.label)
         : Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(widget.icon, size: 20),
+              leading,
               const SizedBox(width: StokasSpace.s2),
               Flexible(child: Text(widget.label)),
             ],
@@ -114,7 +126,7 @@ class _StokasButtonState extends State<StokasButton> {
     final style = _style(c);
     Widget button = widget.variant == StokasButtonVariant.primary
         ? FilledButton(
-            onPressed: widget.onPressed,
+            onPressed: onPressed,
             style: style,
             focusNode: widget.focusNode,
             autofocus: widget.autofocus,
@@ -122,7 +134,7 @@ class _StokasButtonState extends State<StokasButton> {
             child: child,
           )
         : OutlinedButton(
-            onPressed: widget.onPressed,
+            onPressed: onPressed,
             style: style,
             focusNode: widget.focusNode,
             autofocus: widget.autofocus,

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/config.dart';
 import '../core/format.dart';
 import '../data/providers.dart';
+import 'design/stokas_button.dart';
+import 'design/stokas_tokens.dart';
 
 class MutationScreen extends ConsumerStatefulWidget {
   // Data yang dikirim dari halaman depan
@@ -69,7 +71,13 @@ class _MutationScreenState extends ConsumerState<MutationScreen> {
         if (!mounted) return;
         setState(() => _saving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceAll("Exception:", "")), backgroundColor: Colors.red),
+          SnackBar(
+            content: Row(children: [
+              Icon(Icons.error_outline, color: context.stokas.canvas),
+              const SizedBox(width: StokasSpace.s2),
+              Expanded(child: Text(e.toString().replaceAll("Exception:", ""))),
+            ]),
+          ),
         );
       }
     }
@@ -77,18 +85,14 @@ class _MutationScreenState extends ConsumerState<MutationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.stokas;
     return Scaffold(
       appBar: AppBar(title: const Text("Pindah Lokasi Stok")),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(StokasSpace.s4),
         child: Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            side: BorderSide(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(12)
-          ),
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(StokasSpace.s5),
             child: Form(
               key: _formKey,
               child: Column(
@@ -98,32 +102,34 @@ class _MutationScreenState extends ConsumerState<MutationScreen> {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
-                        child: const Icon(Icons.swap_horiz, color: Colors.blue, size: 30),
+                        padding: const EdgeInsets.all(StokasSpace.s3),
+                        decoration: BoxDecoration(color: c.surfaceSunken, borderRadius: BorderRadius.circular(StokasRadius.md)),
+                        child: Icon(Icons.swap_horiz, color: c.stock, size: StokasSpace.s6),
                       ),
-                      const SizedBox(width: 15),
+                      const SizedBox(width: StokasSpace.s4),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(_productName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          Text("Stok Tersedia: ${formatQty(_maxQty)} $_unit", style: const TextStyle(color: Colors.grey)),
+                          Text(_productName, style: StokasType.titleLg.copyWith(color: c.ink)),
+                          Text("Stok Tersedia: ${formatQty(_maxQty)} $_unit", style: StokasType.body.copyWith(color: c.inkMuted)),
                         ],
                       )
                     ],
                   ),
-                  const Divider(height: 30),
+                  const SizedBox(height: StokasSpace.s4),
+                  const Divider(),
+                  const SizedBox(height: StokasSpace.s4),
 
                   // Info Pindah
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _buildFloorBadge(_currentFloor, false),
-                      const Icon(Icons.arrow_forward, color: Colors.grey),
-                      _buildFloorBadge(_targetFloor, true),
+                      _buildFloorBadge(c, _currentFloor, false),
+                      Icon(Icons.arrow_forward, color: c.inkMuted),
+                      _buildFloorBadge(c, _targetFloor, true),
                     ],
                   ),
-                  const SizedBox(height: 25),
+                  const SizedBox(height: StokasSpace.s5),
 
                   // Input Jumlah
                   TextFormField(
@@ -144,21 +150,14 @@ class _MutationScreenState extends ConsumerState<MutationScreen> {
                     },
                   ),
 
-                  const SizedBox(height: 30),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFEF6C00), // Oranye
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      onPressed: _saving ? null : _submitMutation,
-                      icon: const Icon(Icons.check_circle_outline),
-                      label: const Text("PROSES PINDAH", style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                  )
+                  const SizedBox(height: StokasSpace.s5),
+                  StokasButton(
+                    label: "PROSES PINDAH",
+                    icon: Icons.check_circle_outline,
+                    expand: true,
+                    loading: _saving,
+                    onPressed: _submitMutation,
+                  ),
                 ],
               ),
             ),
@@ -168,24 +167,26 @@ class _MutationScreenState extends ConsumerState<MutationScreen> {
     );
   }
 
-  Widget _buildFloorBadge(String text, bool isDest) {
+  // Asal dan tujuan dibedakan dengan label + ikon, bukan warna.
+  Widget _buildFloorBadge(StokasColors c, String text, bool isDest) {
     return Column(
       children: [
-        Text(isDest ? "KE LOKASI" : "DARI LOKASI", style: const TextStyle(fontSize: 10, color: Colors.grey)),
-        const SizedBox(height: 5),
+        Text(isDest ? "KE LOKASI" : "DARI LOKASI", style: StokasType.label.copyWith(color: c.inkMuted)),
+        const SizedBox(height: StokasSpace.s1),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: StokasSpace.s4, vertical: StokasSpace.s2),
           decoration: BoxDecoration(
-            color: isDest ? Colors.green.shade50 : Colors.red.shade50,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: isDest ? Colors.green : Colors.red),
+            color: isDest ? c.surfaceSunken : c.surface,
+            borderRadius: BorderRadius.circular(StokasRadius.pill),
+            border: Border.all(color: isDest ? c.stock : c.lineStrong),
           ),
-          child: Text(
-            text,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: isDest ? Colors.green.shade700 : Colors.red.shade700
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(isDest ? Icons.login : Icons.logout, size: 16, color: c.ink),
+              const SizedBox(width: StokasSpace.s1),
+              Text(text, style: StokasType.title.copyWith(color: c.ink)),
+            ],
           ),
         ),
       ],

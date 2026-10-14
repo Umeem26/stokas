@@ -7,10 +7,20 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/app_exception.dart';
 import '../../core/config.dart';
 
-const inactiveAccountMessage = 'Akun tidak aktif atau tidak ditemukan. Hubungi owner.';
-const wrongCredentialsMessage = 'Username atau password salah';
-const networkErrorMessage = 'Tidak ada koneksi. Coba lagi.';
+const inactiveAccountMessage = 'Akun dinonaktifkan atau tidak ditemukan. Hubungi owner.';
+const wrongCredentialsMessage = 'Username atau password salah. Periksa lalu coba lagi.';
+const networkErrorMessage = 'Tidak ada koneksi. Periksa internet, lalu coba lagi.';
 const genericSignInMessage = 'Gagal masuk. Coba lagi.';
+
+/// Jenis kegagalan login; layar Login memilih ikon dari sini.
+enum SignInFailure { wrongCredentials, network, inactive, other }
+
+/// Galat login bertipe dengan pesan ramah (tidak pernah memuat password).
+class SignInException extends AppException {
+  final SignInFailure failure;
+
+  const SignInException(this.failure, super.message, [super.cause]);
+}
 
 /// Perubahan sesi yang relevan untuk gerbang login.
 enum AuthChange { signedIn, signedOut }
@@ -28,21 +38,21 @@ abstract class AuthRepository {
 }
 
 /// Terjemahkan error login menjadi pesan Indonesia. Tidak pernah memuat password.
-AppException mapSignInError(Object error) {
+SignInException mapSignInError(Object error) {
   if (error is AuthRetryableFetchException || error is SocketException || error is TimeoutException) {
-    return AppException(networkErrorMessage, error);
+    return SignInException(SignInFailure.network, networkErrorMessage, error);
   }
   if (error is AuthException) {
     if (error.code == 'invalid_credentials' || error.message.toLowerCase().contains('invalid login credentials')) {
-      return AppException(wrongCredentialsMessage, error);
+      return SignInException(SignInFailure.wrongCredentials, wrongCredentialsMessage, error);
     }
-    if (error.code == 'user_banned') return AppException(inactiveAccountMessage, error);
+    if (error.code == 'user_banned') return SignInException(SignInFailure.inactive, inactiveAccountMessage, error);
   }
   final text = error.toString().toLowerCase();
   if (text.contains('socketexception') || text.contains('failed host lookup') || text.contains('clientexception')) {
-    return AppException(networkErrorMessage, error);
+    return SignInException(SignInFailure.network, networkErrorMessage, error);
   }
-  return AppException(genericSignInMessage, error);
+  return SignInException(SignInFailure.other, genericSignInMessage, error);
 }
 
 class SupabaseAuthRepository implements AuthRepository {

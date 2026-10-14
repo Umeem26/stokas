@@ -11,15 +11,26 @@ const attentionLimit = 5;
 /// Jenis masalah, berurutan dari yang paling mendesak.
 enum AttentionKind { expired, nearExpiry, belowMin, noPrice }
 
+/// Satu baris "Perlu diurus" = satu barang. [kind] dan [detail] dari kondisi terparahnya;
+/// [otherIssues] = jumlah masalah lain barang itu (ditulis "+N masalah lain" di rincian).
 class AttentionItem {
   final AttentionKind kind;
   final Map<String, dynamic> product;
   final String detail;
+  final int otherIssues;
 
-  const AttentionItem({required this.kind, required this.product, required this.detail});
+  const AttentionItem({required this.kind, required this.product, required this.detail, this.otherIssues = 0});
 
   String get productId => product['id'] as String;
   String get name => '${product['brand_name']}';
+}
+
+/// Satu kondisi bermasalah; [days] = selisih hari ke kedaluwarsa (0 untuk jenis tanpa tanggal).
+typedef _Issue = ({AttentionKind kind, int days, String detail});
+
+int _bySeverity(_Issue a, _Issue b) {
+  final c = a.kind.index.compareTo(b.kind.index);
+  return c != 0 ? c : a.days.compareTo(b.days);
 }
 
 bool _active(Map<String, dynamic> p) => p['is_deleted'] != true;
@@ -35,8 +46,10 @@ String _batchDetail(Map<String, dynamic> batch, Map<String, dynamic> product) {
   return '${batch['floor_name']} · ${formatDayId(d)} · ${formatQty(batch['quantity'] as num)} ${product['unit_type'] ?? ''}'.trim();
 }
 
-/// Daftar "Perlu diurus" (maks [limit]): batch kedaluwarsa (qty > 0) -> batch hampir kedaluwarsa
-/// (<= [nearExpiryDays] hari) -> produk dengan stok layak jual < min_stock -> harga belum diatur (0).
+/// Daftar "Perlu diurus" (maks [limit]), satu baris per barang. Kondisi dari yang terparah:
+/// batch kedaluwarsa (qty > 0) -> batch hampir kedaluwarsa (<= [nearExpiryDays] hari) -> stok layak
+/// jual < min_stock -> harga belum diatur (0); dalam satu jenis, tanggal paling awal dulu.
+/// Baris diurutkan menurut kondisi terparah masing-masing, lalu nama.
 /// [products] = produk aktif; [stockRows] = batch beserta `products`. Produk terhapus diabaikan.
 List<AttentionItem> attentionItems({
   required List<Map<String, dynamic>> products,
@@ -45,53 +58,51 @@ List<AttentionItem> attentionItems({
   int limit = attentionLimit,
 }) {
   final byId = {for (final p in products.where(_active)) p['id'] as String: p};
-  final batches = [
-    for (final r in withoutDeleted(stockRows))
-      if (byId.containsKey(r['product_id']) && (r['quantity'] as num? ?? 0) > 0) r,
-  ];
-
-  final expired = <(int, AttentionItem)>[];
-  final nearExpiry = <(int, AttentionItem)>[];
+  final issues = {for (final id in byId.keys) id: <_Issue>[]};
   final available = {for (final id in byId.keys) id: 0 as num};
-  for (final b in batches) {
-    final product = byId[b['product_id']]!;
+
+  for (final b in withoutDeleted(stockRows)) {
+    final product = byId[b['product_id']];
+    if (product == null || (b['quantity'] as num? ?? 0) <= 0) continue;
+    final id = product['id'] as String;
     final expiry = b['expiry_date'] as String?;
     final days = expiry == null || expiry.isEmpty ? null : daysUntilExpiry(expiry, now);
     if (days != null && days < 0) {
-      expired.add((days, AttentionItem(kind: AttentionKind.expired, product: product, detail: _batchDetail(b, product))));
+      issues[id]!.add((kind: AttentionKind.expired, days: days, detail: _batchDetail(b, product)));
       continue; // batch kedaluwarsa tidak dihitung sebagai stok layak jual
     }
-    available[product['id']] = available[product['id']]! + (b['quantity'] as num);
+    available[id] = available[id]! + (b['quantity'] as num);
     if (days != null && days <= nearExpiryDays) {
-      nearExpiry.add((days, AttentionItem(kind: AttentionKind.nearExpiry, product: product, detail: _batchDetail(b, product))));
+      issues[id]!.add((kind: AttentionKind.nearExpiry, days: days, detail: _batchDetail(b, product)));
     }
   }
 
-  int byName(Map<String, dynamic> a, Map<String, dynamic> b) => '${a['brand_name']}'.compareTo('${b['brand_name']}');
-  int byDays((int, AttentionItem) a, (int, AttentionItem) b) {
-    final c = a.$1.compareTo(b.$1);
-    return c != 0 ? c : byName(a.$2.product, b.$2.product);
+  for (final p in byId.values) {
+    final id = p['id'] as String;
+    final minStock = (p['min_stock'] as num?) ?? 0;
+    if (available[id]! < minStock) {
+      issues[id]!.add((
+        kind: AttentionKind.belowMin,
+        days: 0,
+        detail: 'sisa ${formatQty(available[id]!)}, batas minimum ${formatQty(minStock)}',
+      ));
+    }
+    if (((p['price'] as num?) ?? 0) == 0) issues[id]!.add((kind: AttentionKind.noPrice, days: 0, detail: 'Kode $id'));
   }
 
-  final sorted = byId.values.toList()..sort(byName);
-  final belowMin = [
-    for (final p in sorted)
-      if (available[p['id']]! < ((p['min_stock'] as num?) ?? 0))
-        AttentionItem(
-          kind: AttentionKind.belowMin,
-          product: p,
-          detail: 'sisa ${formatQty(available[p['id']]!)}, batas minimum ${formatQty(p['min_stock'] as num)}',
-        ),
-  ];
-  final noPrice = [
-    for (final p in sorted)
-      if (((p['price'] as num?) ?? 0) == 0) AttentionItem(kind: AttentionKind.noPrice, product: p, detail: 'Kode ${p['id']}'),
-  ];
+  final rows = <(_Issue, AttentionItem)>[];
+  for (final MapEntry(key: id, value: list) in issues.entries) {
+    if (list.isEmpty) continue;
+    list.sort(_bySeverity);
+    final worst = list.first;
+    final others = list.length - 1;
+    final detail = others > 0 ? '${worst.detail} · +$others masalah lain' : worst.detail;
+    rows.add((worst, AttentionItem(kind: worst.kind, product: byId[id]!, detail: detail, otherIssues: others)));
+  }
 
-  return [
-    ...(expired..sort(byDays)).map((e) => e.$2),
-    ...(nearExpiry..sort(byDays)).map((e) => e.$2),
-    ...belowMin,
-    ...noPrice,
-  ].take(limit).toList();
+  rows.sort((a, b) {
+    final c = _bySeverity(a.$1, b.$1);
+    return c != 0 ? c : a.$2.name.compareTo(b.$2.name);
+  });
+  return rows.take(limit).map((r) => r.$2).toList();
 }

@@ -78,7 +78,13 @@ class _StockAdjustDialogState extends ConsumerState<StockAdjustDialog> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e"), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Row(children: [
+          Icon(Icons.error_outline, color: context.stokas.canvas),
+          const SizedBox(width: StokasSpace.s2),
+          Expanded(child: Text("$e")),
+        ]),
+      ));
     }
   }
 
@@ -120,7 +126,7 @@ class _StockAdjustDialogState extends ConsumerState<StockAdjustDialog> {
                 child: InputDecorator(
                   decoration: InputDecoration(
                     labelText: "Tanggal Kadaluarsa (Opsional)",
-                    prefixIcon: Icon(Icons.calendar_today, color: Colors.blue[700]),
+                    prefixIcon: const Icon(Icons.calendar_today),
                     suffixIcon: _expiry == null
                         ? null
                         : IconButton(

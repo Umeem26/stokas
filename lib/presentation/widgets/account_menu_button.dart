@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/session.dart';
+import '../design/stokas_button.dart';
 import '../design/stokas_tokens.dart';
 
 /// Konfirmasi lalu keluar; dipakai menu akun dan rel samping.
@@ -11,12 +12,10 @@ Future<void> confirmSignOut(BuildContext context, WidgetRef ref) async {
     builder: (ctx) => AlertDialog(
       title: const Text("Keluar?"),
       content: const Text("Anda harus login lagi untuk memakai aplikasi."),
+      actionsAlignment: MainAxisAlignment.spaceBetween,
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Batal")),
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, true),
-          child: const Text("KELUAR", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-        ),
+        StokasButton.danger(label: "Keluar", icon: Icons.logout, onPressed: () => Navigator.pop(ctx, true)),
+        StokasButton.secondary(label: "Batal", onPressed: () => Navigator.pop(ctx, false)),
       ],
     ),
   );
@@ -54,11 +53,11 @@ class AccountMenuButton extends ConsumerWidget {
           ),
         ),
         const PopupMenuDivider(),
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'logout',
           child: ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.logout, color: Colors.red),
+            leading: Icon(Icons.logout, color: context.stokas.negative),
             title: Text("Keluar"),
           ),
         ),

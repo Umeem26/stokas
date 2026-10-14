@@ -5,8 +5,10 @@ import 'package:minimarket_pos/core/app_exception.dart';
 import 'package:minimarket_pos/data/product_model.dart';
 import 'package:minimarket_pos/data/profile_model.dart';
 import 'package:minimarket_pos/data/repositories/auth_repository.dart';
+import 'package:minimarket_pos/core/permissions.dart';
 import 'package:minimarket_pos/data/repositories/product_repository.dart';
 import 'package:minimarket_pos/data/repositories/profile_repository.dart';
+import 'package:minimarket_pos/data/repositories/staff_repository.dart';
 import 'package:minimarket_pos/data/repositories/stock_repository.dart';
 import 'package:minimarket_pos/data/repositories/transaction_repository.dart';
 import 'package:minimarket_pos/data/revenue.dart';
@@ -287,4 +289,21 @@ class FakeProfileRepository implements ProfileRepository {
 
   @override
   Future<List<Profile>> getAllProfiles() async => profiles.values.toList();
+}
+
+/// Staf palsu: mencatat setiap panggilan setActive / setPassword / createStaff.
+class FakeStaffRepository implements StaffRepository {
+  final setActiveCalls = <(String, bool)>[];
+  final setPasswordCalls = <String>[];
+  final created = <String>[];
+
+  @override
+  Future<void> createStaff({required String username, required String fullName, required AppRole role, required String password}) async =>
+      created.add(username);
+
+  @override
+  Future<void> setPassword({required String userId, required String password}) async => setPasswordCalls.add(userId);
+
+  @override
+  Future<void> setActive({required String userId, required bool isActive}) async => setActiveCalls.add((userId, isActive));
 }

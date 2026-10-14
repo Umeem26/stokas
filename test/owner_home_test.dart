@@ -131,7 +131,22 @@ void main() {
       'batch campur: kedaluwarsa tidak menolong stok layak jual': (
         [product('A', minStock: 10)],
         (p) => [batch(p[0], 50, expiry: '2026-10-01'), batch(p[0], 3, floor: 'Lantai 2')],
-        [(AttentionKind.expired, 'A'), (AttentionKind.belowMin, 'A')],
+        [(AttentionKind.expired, 'A')],
+      ),
+      'barang dengan 2 batch kedaluwarsa + di bawah minimum -> satu baris': (
+        [product('A', minStock: 10)],
+        (p) => [batch(p[0], 5, expiry: '2026-10-01'), batch(p[0], 4, floor: 'Lantai 2', expiry: '2026-10-05')],
+        [(AttentionKind.expired, 'A')],
+      ),
+      'barang berbeda tetap terpisah, urut kondisi terparah masing-masing': (
+        [product('A', price: 0), product('B', minStock: 10), product('C', price: 0, minStock: 10)],
+        (p) => [batch(p[0], 5), batch(p[1], 5, expiry: '2026-10-20'), batch(p[2], 5, expiry: '2026-10-01')],
+        [(AttentionKind.expired, 'C'), (AttentionKind.nearExpiry, 'B'), (AttentionKind.noPrice, 'A')],
+      ),
+      'produk bermasalah ke-6 terpotong (barang dengan banyak masalah dihitung satu)': (
+        [product('A', price: 0, minStock: 10), for (final id in ['B', 'C', 'D', 'E', 'F']) product(id, price: 0)],
+        (p) => [batch(p[0], 5, expiry: '2026-10-01'), batch(p[0], 5, expiry: '2026-10-02'), for (final x in p.skip(1)) batch(x, 5)],
+        [(AttentionKind.expired, 'A'), for (final id in ['B', 'C', 'D', 'E']) (AttentionKind.noPrice, id)],
       ),
       'stok = minimum tidak muncul; tanpa batch = sisa 0': (
         [product('A', minStock: 5), product('B', minStock: 5)],
@@ -167,10 +182,16 @@ void main() {
       });
     }
 
-    test('rincian satu baris', () {
+    test('rincian: kondisi terparah + "+N masalah lain"', () {
       final a = product('A', minStock: 10);
-      final items = attentionItems(products: [a], stockRows: [batch(a, 5, expiry: '2026-10-01'), batch(a, 3)], now: now);
-      expect(items.map((i) => i.detail), ['Lantai 1 · 1 Okt 2026 · 5 pcs', 'sisa 3, batas minimum 10']);
+      final b = product('B', minStock: 10);
+      final items = attentionItems(
+        products: [a, b],
+        stockRows: [batch(a, 5, expiry: '2026-10-03'), batch(a, 4, floor: 'Lantai 2', expiry: '2026-10-01'), batch(b, 3)],
+        now: now,
+      );
+      expect(items.map((i) => i.detail), ['Lantai 2 · 1 Okt 2026 · 4 pcs · +2 masalah lain', 'sisa 3, batas minimum 10']);
+      expect(items.map((i) => i.otherIssues), [2, 0]);
       expect(nearExpiryDays, 14);
     });
   });
