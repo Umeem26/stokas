@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../core/config.dart';
 import '../../core/format.dart';
 import '../../data/providers.dart';
+import '../design/stokas_button.dart';
 import '../design/stokas_tokens.dart';
 
 enum StockAdjustMode { restock, opname }
@@ -72,7 +73,7 @@ class _StockAdjustDialogState extends ConsumerState<StockAdjustDialog> {
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_isOpname ? "✅ Opname tersimpan" : "✅ Stok masuk tersimpan")),
+        SnackBar(content: Text(_isOpname ? "Opname tersimpan" : "Stok masuk tersimpan")),
       );
       Navigator.pop(context, true);
     } catch (e) {
@@ -102,7 +103,7 @@ class _StockAdjustDialogState extends ConsumerState<StockAdjustDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(product['brand_name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              Text(product['brand_name'] ?? '', style: StokasType.title.copyWith(color: context.stokas.ink)),
               const SizedBox(height: 15),
               DropdownButtonFormField<String>(
                 decoration: const InputDecoration(labelText: "Lokasi"),
@@ -165,13 +166,8 @@ class _StockAdjustDialogState extends ConsumerState<StockAdjustDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: _saving ? null : () => Navigator.pop(context), child: const Text("Batal")),
-        ElevatedButton(
-          onPressed: _saving ? null : _submit,
-          child: _saving
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text("SIMPAN"),
-        ),
+        StokasButton.secondary(label: "Batal", onPressed: _saving ? null : () => Navigator.pop(context)),
+        StokasButton(label: "Simpan", loading: _saving, onPressed: _submit),
       ],
     );
   }

@@ -68,7 +68,7 @@ void main() {
 
     await tester.enterText(find.byKey(const Key('stockAdjustQty')), '12');
     await tester.enterText(find.byKey(const Key('stockAdjustNote')), 'Kiriman supplier');
-    await tester.tap(find.text('SIMPAN'));
+    await tester.tap(find.text('Simpan'));
     await tester.pumpAndSettle();
 
     expect(stock.calls, ['restock A Lantai 1 2026-12-1 12 Kiriman supplier']);
@@ -83,12 +83,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Stok tercatat: 5 pcs'), findsOneWidget);
 
-    await tester.tap(find.text('SIMPAN'));
+    await tester.tap(find.text('Simpan'));
     await tester.pump();
     expect(stock.calls, isEmpty, reason: 'jumlah wajib diisi');
 
     await tester.enterText(find.byKey(const Key('stockAdjustQty')), '0');
-    await tester.tap(find.text('SIMPAN'));
+    await tester.tap(find.text('Simpan'));
     await tester.pumpAndSettle();
 
     expect(stock.calls, ['opname A Lantai 2 - 0']);
@@ -100,7 +100,7 @@ void main() {
     await pumpApp(tester, MutationScreen(sourceStock: stock.rows.first), stock: stock);
 
     await tester.enterText(find.byType(TextFormField), '3');
-    await tester.tap(find.text('PROSES PINDAH'));
+    await tester.tap(find.text('Pindahkan'));
     await tester.pumpAndSettle();
 
     expect(stock.calls, ['transfer A Lantai 1->Lantai 2 2026-12-1 3']);

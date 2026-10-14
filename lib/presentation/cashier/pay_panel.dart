@@ -162,6 +162,7 @@ class PayPanel extends StatefulWidget {
   final void Function(int paid, PaymentMethod method) onPay;
   final VoidCallback onBack;
   final Widget? header; // mis. ringkasan pesanan yang bisa dibuka (layar sempit)
+  final PaymentMethod initialMethod; // cara bayar terakhir dipakai di sesi ini
 
   const PayPanel({
     super.key,
@@ -171,6 +172,7 @@ class PayPanel extends StatefulWidget {
     required this.onBack,
     this.error,
     this.header,
+    this.initialMethod = PaymentMethod.cash,
   });
 
   @override
@@ -181,7 +183,18 @@ class _PayPanelState extends State<PayPanel> {
   final _controller = TextEditingController();
   final _fieldFocus = FocusNode();
   final _panelFocus = FocusNode(debugLabel: 'pay-panel');
-  PaymentMethod _method = PaymentMethod.cash;
+  late PaymentMethod _method = widget.initialMethod;
+
+  @override
+  void initState() {
+    super.initState();
+    // Tanpa kolom uang (QRIS/Transfer) fokus ke panel agar 1/2/3, Enter, dan Esc langsung jalan.
+    if (_method != PaymentMethod.cash) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _panelFocus.requestFocus();
+      });
+    }
+  }
 
   bool get _cash => _method == PaymentMethod.cash;
   int get _cashReceived => parseRupiah(_controller.text);
@@ -222,6 +235,12 @@ class _PayPanelState extends State<PayPanel> {
     final key = event.logicalKey;
     if (key == LogicalKeyboardKey.escape) {
       if (!widget.busy) widget.onBack();
+      return KeyEventResult.handled;
+    }
+    // Enter di luar kolom (QRIS/Transfer) = "Sudah dibayar"; di kolom uang ditangani onSubmitted.
+    final enter = key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.numpadEnter;
+    if (enter && FocusManager.instance.primaryFocus == _panelFocus) {
+      _submit();
       return KeyEventResult.handled;
     }
     // Angka di kolom uang adalah isian, bukan pintasan.

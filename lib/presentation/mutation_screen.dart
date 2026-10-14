@@ -63,7 +63,7 @@ class _MutationScreenState extends ConsumerState<MutationScreen> {
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("✅ Berhasil Pindah Stok!")),
+            const SnackBar(content: Text("Stok dipindahkan")),
           );
           Navigator.pop(context, true); // Kembali & Refresh
         }
@@ -152,7 +152,7 @@ class _MutationScreenState extends ConsumerState<MutationScreen> {
 
                   const SizedBox(height: StokasSpace.s5),
                   StokasButton(
-                    label: "PROSES PINDAH",
+                    label: "Pindahkan",
                     icon: Icons.check_circle_outline,
                     expand: true,
                     loading: _saving,
@@ -171,7 +171,7 @@ class _MutationScreenState extends ConsumerState<MutationScreen> {
   Widget _buildFloorBadge(StokasColors c, String text, bool isDest) {
     return Column(
       children: [
-        Text(isDest ? "KE LOKASI" : "DARI LOKASI", style: StokasType.label.copyWith(color: c.inkMuted)),
+        Text(isDest ? "Ke lokasi" : "Dari lokasi", style: StokasType.label.copyWith(color: c.inkMuted)),
         const SizedBox(height: StokasSpace.s1),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: StokasSpace.s4, vertical: StokasSpace.s2),
