@@ -12,6 +12,7 @@ import 'design/stokas_button.dart';
 import 'design/stokas_tokens.dart';
 import 'mutation_screen.dart';
 import 'edit_product_screen.dart';
+import 'owner/product_detail_screen.dart';
 import 'warehouse/new_product_screen.dart';
 import 'widgets/account_menu_button.dart';
 import 'widgets/error_view.dart';
@@ -45,6 +46,10 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
       ref.invalidate(productListProvider);
     }
   }
+
+  /// Owner ke Detail barang (harga & modal); gudang ke form edit tanpa harga.
+  Widget _editScreen(AppRole? role, Map<String, dynamic> product) =>
+      can(role, Permission.editPrices) ? ProductDetailScreen(product: product) : EditProductScreen(productData: product);
 
   @override
   Widget build(BuildContext context) {
@@ -82,7 +87,7 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
                     ? _NoStockTile(
                         product: noStock[index - stocks.length],
                         role: role,
-                        onEdit: () => _open(EditProductScreen(productData: noStock[index - stocks.length])),
+                        onEdit: () => _open(_editScreen(role, noStock[index - stocks.length])),
                       )
                     : _StockTile(
                   stock: stocks[index],
@@ -90,7 +95,7 @@ class _StockListScreenState extends ConsumerState<StockListScreen> {
                   role: role,
                   onMove: () => _open(MutationScreen(sourceStock: stocks[index])),
                   onAdjust: (mode) => _adjust(stocks[index], mode),
-                  onEdit: () => _open(EditProductScreen(productData: stocks[index]['products'])),
+                  onEdit: () => _open(_editScreen(role, stocks[index]['products'])),
                 ),
               );
             },

@@ -30,17 +30,6 @@ void main() {
   });
 
   group('"hari ini" Asia/Jakarta', () {
-    test('00:30 WIB (17:30 UTC hari sebelumnya) sudah termasuk hari baru', () {
-      final r = jakartaTodayRangeIso(DateTime.utc(2026, 10, 12, 17, 30));
-      expect(r.start, '2026-10-12T17:00:00.000Z');
-      expect(r.end, '2026-10-13T17:00:00.000Z');
-    });
-
-    test('23:59 WIB masih hari yang sama', () {
-      final r = jakartaTodayRangeIso(DateTime.utc(2026, 10, 13, 16, 59));
-      expect(r.start, '2026-10-12T17:00:00.000Z');
-    });
-
     test('instan yang sama dari zona lain menghasilkan batas yang sama', () {
       final instant = DateTime.utc(2026, 10, 13, 2);
       expect(jakartaDayStartUtc(instant.toLocal()), jakartaDayStartUtc(instant));

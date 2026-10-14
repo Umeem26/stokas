@@ -49,16 +49,4 @@ void main() {
     expect(products.single.floors, isEmpty);
     expect(isBatchExpired(batch('A', 7, expiry: '2026-01-01'), now), isTrue);
   });
-
-  test('lowStockCount per produk, tanpa batch kedaluwarsa dan produk terhapus', () {
-    final rows = [
-      batch('A', 3, minStock: 5), // menipis
-      batch('A', 1, floor: 'Lantai 2', minStock: 5),
-      batch('B', 4, minStock: 5),
-      batch('B', 20, expiry: '2026-10-01', minStock: 5), // kedaluwarsa: tidak menolong -> menipis
-      batch('C', 50, minStock: 5), // aman
-      batch('D', 0, deleted: true), // terhapus: diabaikan
-    ];
-    expect(lowStockCount(rows, now), 2);
-  });
 }

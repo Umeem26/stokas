@@ -1,7 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/app_exception.dart';
-import '../../core/jakarta_time.dart';
+import '../revenue.dart';
 import '../transaction_model.dart';
 
 /// Transaksi hanya dibaca; penulisan lewat RPC checkout (atomik & idempoten).
@@ -16,8 +16,8 @@ abstract class TransactionRepository {
     required PaymentMethod method,
   });
 
-  /// Transaksi sejak tengah malam Asia/Jakarta untuk instan [now].
-  Future<List<TransactionModel>> getTodayTransactions(DateTime now);
+  /// Total dan waktu transaksi pada [start, end) (instan UTC), untuk ringkasan omzet Home.
+  Future<List<RevenueRow>> getRevenueRows(DateTime start, DateTime end);
 
   Future<List<TransactionModel>> getTransactionHistory();
 
@@ -48,15 +48,17 @@ class SupabaseTransactionRepository implements TransactionRepository {
   }
 
   @override
-  Future<List<TransactionModel>> getTodayTransactions(DateTime now) {
-    return guard('Gagal memuat transaksi hari ini', () async {
-      final range = jakartaTodayRangeIso(now);
+  Future<List<RevenueRow>> getRevenueRows(DateTime start, DateTime end) {
+    return guard('Gagal memuat omzet', () async {
       final response = await _client
           .from('transactions')
-          .select()
-          .gte('created_at', range.start)
-          .lt('created_at', range.end);
-      return response.map(TransactionModel.fromRow).toList();
+          .select('total_amount, created_at')
+          .gte('created_at', start.toUtc().toIso8601String())
+          .lt('created_at', end.toUtc().toIso8601String());
+      return [
+        for (final r in response)
+          (amount: (r['total_amount'] as num).round(), createdAt: DateTime.parse(r['created_at'] as String).toUtc()),
+      ];
     });
   }
 

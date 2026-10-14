@@ -32,3 +32,20 @@ String? validateStaffPassword(String? value) {
   if (value == null || value.length < 8) return 'Password minimal 8 karakter';
   return null;
 }
+
+final _rupiahPattern = RegExp(r'^(\d+|\d{1,3}(\.\d{3})+)$');
+
+/// Isian uang (harga/modal): bilangan bulat >= 0, boleh bertitik ribuan ("12.500").
+String? validateRupiahInput(String? value) {
+  final v = (value ?? '').trim();
+  if (v.isEmpty) return 'Wajib diisi (boleh 0)';
+  if (!_rupiahPattern.hasMatch(v)) return 'Isi bilangan bulat 0 atau lebih';
+  return null;
+}
+
+/// Minimum stok: angka >= 0 (boleh pecahan untuk gram/liter).
+String? validateMinStock(String? value) {
+  final n = num.tryParse((value ?? '').trim().replaceAll(',', '.'));
+  if (n == null || n < 0) return 'Isi angka 0 atau lebih';
+  return null;
+}

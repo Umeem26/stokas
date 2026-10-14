@@ -46,10 +46,3 @@ List<SellableProduct> sellableProducts(List<Map<String, dynamic>> rows, DateTime
       SellableProduct(product: products[id]!, available: available[id]!, floors: floors[id]!.toList()..sort()),
   ];
 }
-
-/// Jumlah produk yang stok tersedianya (tidak kedaluwarsa) <= min_stock.
-int lowStockCount(List<Map<String, dynamic>> rows, DateTime now) {
-  return sellableProducts(rows, now)
-      .where((p) => p.available <= ((p.product['min_stock'] as num?) ?? 0))
-      .length;
-}

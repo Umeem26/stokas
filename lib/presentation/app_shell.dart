@@ -7,13 +7,13 @@ import 'cashier_screen.dart';
 import 'design/stokas_logo.dart';
 import 'design/stokas_tokens.dart';
 import 'history_screen.dart';
+import 'owner/home_screen.dart';
 import 'staff_screen.dart';
 import 'stock_list_screen.dart';
 import 'warehouse/opname_screen.dart';
 import 'warehouse/receive_screen.dart';
 import 'warehouse/transfer_screen.dart';
 import 'widgets/account_menu_button.dart';
-import 'widgets/segera_hadir_view.dart';
 
 /// Lebar minimum untuk rel samping; di bawahnya tab bawah.
 const double railBreakpoint = 768;
@@ -59,7 +59,7 @@ enum AppTab {
       case AppTab.pindah:
         return const TransferScreen();
       case AppTab.home:
-        return SegeraHadirView(title: label);
+        return const HomeScreen();
     }
   }
 }

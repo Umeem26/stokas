@@ -150,7 +150,7 @@ void main() {
     expect(find.text('Barang A: Stok tersisa 1'), findsOneWidget);
   });
 
-  group('Edit produk & harga modal (product_costs)', () {
+  group('Edit produk gudang tanpa harga', () {
     final productRow = row(1, 'A', 5)['products'] as Map<String, dynamic>;
 
     testWidgets('gudang tidak membaca maupun melihat harga modal', (tester) async {
@@ -161,16 +161,12 @@ void main() {
       expect(products.capitalReads, 0);
       expect(find.text('Modal'), findsNothing);
       expect(find.text('3.000'), findsNothing);
-    });
+      expect(find.textContaining('3.500'), findsNothing);
 
-    testWidgets('owner memuat harga modal dari product_costs', (tester) async {
-      final products = FakeProductRepository()..capitalPrices['A'] = 3000;
-      await pumpApp(tester, EditProductScreen(productData: productRow), role: AppRole.owner, products: products);
+      await tester.tap(find.text('Simpan'));
       await tester.pumpAndSettle();
-
-      expect(products.capitalReads, 1);
-      expect(find.text('3.000'), findsOneWidget);
-      expect(find.text('3.500'), findsOneWidget);
+      expect(products.updates.single.$2, isFalse); // harga tidak dikirim
+      expect(products.capitalSaves, isEmpty);
     });
   });
 }

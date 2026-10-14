@@ -1,8 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'attention.dart';
 import 'profile_model.dart';
-import 'stock_availability.dart';
+import 'revenue.dart';
 import 'transaction_model.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/product_repository.dart';
@@ -61,22 +62,21 @@ final transactionHistoryProvider = FutureProvider.autoDispose<List<TransactionMo
 /// Jam sekarang; bisa di-override di tes.
 final clockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
 
-class DashboardSummary {
-  final int todayRevenue;
-  final int lowStockCount;
-
-  const DashboardSummary({required this.todayRevenue, required this.lowStockCount});
-}
-
-final dashboardSummaryProvider = FutureProvider.autoDispose<DashboardSummary>((ref) async {
+/// Kartu "Omzet hari ini" di Home owner (hari kalender WIB, dihitung di klien).
+final homeRevenueProvider = FutureProvider.autoDispose<RevenueSummary>((ref) async {
   final now = ref.watch(clockProvider)();
+  final range = revenueRangeUtc(now);
+  final rows = await ref.watch(transactionRepositoryProvider).getRevenueRows(range.start, range.end);
+  return summarizeRevenue(rows, now);
+});
 
-  // 1. Omzet hari ini (sejak tengah malam Asia/Jakarta)
-  final transactions = await ref.watch(transactionRepositoryProvider).getTodayTransactions(now);
-  final total = transactions.fold(0, (sum, t) => sum + t.totalAmount);
-
-  // 2. Barang menipis: stok tersedia (tanpa batch kedaluwarsa) <= min_stock
-  final stocks = await ref.watch(stockRepositoryProvider).getStockList();
-
-  return DashboardSummary(todayRevenue: total, lowStockCount: lowStockCount(stocks, now));
+/// Daftar "Perlu diurus" di Home owner.
+final homeAttentionProvider = FutureProvider.autoDispose<List<AttentionItem>>((ref) async {
+  final now = ref.watch(clockProvider)();
+  // Future.wait meneruskan galat aslinya (AppException), bukan ParallelWaitError.
+  final [products, stocks] = await Future.wait([
+    ref.watch(productRepositoryProvider).getProducts(),
+    ref.watch(stockRepositoryProvider).getStockList(),
+  ]);
+  return attentionItems(products: products, stockRows: stocks, now: now);
 });

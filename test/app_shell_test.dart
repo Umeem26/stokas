@@ -10,9 +10,9 @@ import 'package:minimarket_pos/presentation/auth_gate.dart';
 import 'package:minimarket_pos/presentation/cashier_screen.dart';
 import 'package:minimarket_pos/presentation/history_screen.dart';
 import 'package:minimarket_pos/presentation/login_screen.dart';
+import 'package:minimarket_pos/presentation/owner/home_screen.dart';
 import 'package:minimarket_pos/presentation/stock_list_screen.dart';
 import 'package:minimarket_pos/presentation/warehouse/receive_screen.dart';
-import 'package:minimarket_pos/presentation/widgets/segera_hadir_view.dart';
 
 import 'fakes.dart';
 import 'stock_rpc_test.dart' show pumpApp, row;
@@ -98,8 +98,7 @@ void main() {
         case 'kasir':
           expect(find.byType(CashierScreen), findsOneWidget);
         case 'owner':
-          expect(find.widgetWithText(SegeraHadirView, 'Segera hadir'), findsOneWidget);
-          expect(tester.widget<SegeraHadirView>(find.byType(SegeraHadirView)).title, 'Home');
+          expect(find.byType(HomeScreen), findsOneWidget);
         case 'gudang':
           expect(find.byType(ReceiveScreen), findsOneWidget);
       }

@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../core/format.dart';
-import '../data/product_model.dart';
-import '../core/permissions.dart';
-import '../data/providers.dart';
-import '../data/session.dart';
-import 'add_product_screen.dart'; // Pinjam Formatter Rupiah
 
+import '../core/format.dart';
+import '../core/validators.dart';
+import '../data/product_model.dart';
+import '../data/providers.dart';
+import 'design/stokas_button.dart';
+import 'design/stokas_tokens.dart';
+import 'warehouse/stock_inputs.dart' show FieldError;
+
+const _units = ['pcs', 'gram', 'liter', 'ml'];
+
+/// Edit barang untuk gudang: nama, kategori, satuan, minimum stok. Tanpa harga jual dan modal
+/// (harga tidak dikirim sama sekali; owner memakai Detail barang).
 class EditProductScreen extends ConsumerStatefulWidget {
-  final Map<String, dynamic> productData; // Data barang yang mau diedit
+  final Map<String, dynamic> productData;
 
   const EditProductScreen({super.key, required this.productData});
 
@@ -19,237 +25,128 @@ class EditProductScreen extends ConsumerStatefulWidget {
 
 class _EditProductScreenState extends ConsumerState<EditProductScreen> {
   final _formKey = GlobalKey<FormState>();
+  late final _name = TextEditingController(text: '${widget.productData['brand_name'] ?? ''}');
+  late final _minStock = TextEditingController(text: formatQty((widget.productData['min_stock'] as num?) ?? 0));
+  late int? _categoryId = widget.productData['category_id'] as int?;
+  late String _unit = '${widget.productData['unit_type'] ?? 'pcs'}';
+  bool _busy = false;
+  String? _error;
 
-  // Controller
-  late TextEditingController _idController;
-  late TextEditingController _nameController;
-  late TextEditingController _minStockController;
-  late TextEditingController _priceController;
-  late TextEditingController _capitalPriceController;
-  
-  String? _selectedCategory;
-  String? _selectedUnit;
+  String get _id => widget.productData['id'] as String;
 
   @override
-  void initState() {
-    super.initState();
-    final p = widget.productData;
-    
-    // 1. Isi Formulir dengan Data Lama
-    _idController = TextEditingController(text: p['id']);
-    _nameController = TextEditingController(text: p['brand_name']);
-    _minStockController = TextEditingController(text: p['min_stock'].toString());
-    
-    final price = (p['price'] as num?)?.round() ?? 0;
-    _priceController = TextEditingController(text: CurrencyInputFormatter.format(price));
-    _capitalPriceController = TextEditingController();
-
-    _selectedCategory = p['category_id']?.toString(); // null = tanpa kategori
-    _selectedUnit = p['unit_type'];
-
-    // Harga modal ada di product_costs dan hanya terbaca oleh owner.
-    if (can(ref.read(currentRoleProvider), Permission.viewCapitalPrice)) _loadCapitalPrice();
+  void dispose() {
+    _name.dispose();
+    _minStock.dispose();
+    super.dispose();
   }
 
-  bool _capitalLoaded = false;
-
-  Future<void> _loadCapitalPrice() async {
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final messenger = ScaffoldMessenger.of(context);
     try {
-      final capital = await ref.read(productRepositoryProvider).getCapitalPrice(widget.productData['id']);
+      await ref.read(productRepositoryProvider).updateProduct(
+            ProductModel(
+              id: _id,
+              brandName: _name.text.trim(),
+              categoryId: _categoryId,
+              unitType: _unit,
+              minStock: double.parse(_minStock.text.trim().replaceAll(',', '.')),
+              price: 0, // tidak dikirim (includePrices: false)
+            ),
+            includePrices: false,
+          );
       if (!mounted) return;
-      setState(() {
-        _capitalPriceController.text = CurrencyInputFormatter.format(capital ?? 0);
-        _capitalLoaded = true;
-      });
+      Navigator.pop(context, true);
+      messenger.showSnackBar(const SnackBar(content: Text('Barang disimpan')));
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e"), backgroundColor: Colors.red));
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
-  }
-
-  // Fungsi Update
-  void _updateProduct() async {
-    if (_formKey.currentState!.validate()) {
-      try {
-        final product = ProductModel(
-          id: _idController.text, // ID Tetap
-          brandName: _nameController.text,
-          categoryId: _selectedCategory == null ? null : int.parse(_selectedCategory!),
-          unitType: _selectedUnit!,
-          minStock: double.parse(_minStockController.text),
-          price: parseRupiah(_priceController.text),
-        );
-
-        // Non-owner tidak mengirim harga sama sekali (penjagaan DB: trigger).
-        final role = ref.read(currentRoleProvider);
-        final repo = ref.read(productRepositoryProvider);
-        await repo.updateProduct(product, includePrices: can(role, Permission.editPrices));
-
-        // Harga modal hanya disimpan bila sudah berhasil dimuat (agar tidak menimpa dengan 0).
-        if (can(role, Permission.viewCapitalPrice) && _capitalLoaded) {
-          await repo.saveCapitalPrice(product.id, parseRupiah(_capitalPriceController.text));
-        }
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Data Berhasil Diperbarui!")));
-          Navigator.pop(context, true); // Kembali & Refresh
-        }
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
-      }
-    }
-  }
-
-  // Fungsi Hapus
-  void _deleteProduct() async {
-    // Tampilkan Dialog Konfirmasi Dulu
-    showDialog(
-      context: context, 
-      builder: (ctx) => AlertDialog(
-        title: const Text("Hapus Barang?"),
-        content: const Text("Barang akan disembunyikan dari daftar; riwayat transaksi tetap aman. Yakin?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Batal")),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx); // Tutup dialog
-              try {
-                await ref.read(productRepositoryProvider).deleteProduct(_idController.text);
-                if (mounted) {
-                  Navigator.pop(context, true); // Kembali ke Home & Refresh
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("🗑️ Barang Dihapus")));
-                }
-              } catch (e) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal Hapus: $e")));
-              }
-            }, 
-            child: const Text("HAPUS", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))
-          ),
-        ],
-      )
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final role = ref.watch(currentRoleProvider);
+    final c = context.stokas;
+    final categories = ref.watch(categoriesProvider).value ?? const <Map<String, dynamic>>[];
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Edit Produk"),
-        actions: [
-          if (can(role, Permission.deleteProduct))
-          IconButton(
-            icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
-            tooltip: "Hapus Barang",
-            onPressed: _deleteProduct,
-          )
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  // ID Read Only (TIdak boleh diedit)
-                  TextFormField(
-                    controller: _idController,
-                    readOnly: true, 
-                    decoration: const InputDecoration(
-                      labelText: "Barcode / ID (Tidak bisa diubah)",
-                      filled: true, fillColor: Colors.black12
-                    ),
-                  ),
-                  const SizedBox(height: 15),
-                  _buildTextField(_nameController, "Nama Produk", Icons.label),
-                  const SizedBox(height: 15),
-                   Row(
-                    children: [
-                      Expanded(flex: 2, child: _buildCategoryDropdown()),
-                      const SizedBox(width: 10),
-                      Expanded(flex: 1, child: _buildUnitDropdown()),
-                    ],
-                  ),
-                  const Divider(height: 30),
-                  if (can(role, Permission.editPrices))
-                    Row(
-                      children: [
-                        if (can(role, Permission.viewCapitalPrice)) ...[
-                          Expanded(child: _buildTextField(_capitalPriceController, "Modal", Icons.monetization_on, isCurrency: true, readOnly: !_capitalLoaded)),
-                          const SizedBox(width: 10),
-                        ],
-                        Expanded(child: _buildTextField(_priceController, "Jual", Icons.sell, isCurrency: true)),
-                      ],
-                    )
-                  else
-                    // Harga jual hanya bisa dilihat; harga modal disembunyikan.
-                    _buildTextField(_priceController, "Jual (hanya owner yang bisa mengubah)", Icons.sell, isCurrency: true, readOnly: true),
-                  const SizedBox(height: 15),
-                  _buildTextField(_minStockController, "Min. Stok Alert", Icons.warning_amber, isNumber: true),
-                  
-                  const SizedBox(height: 30),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800]),
-                      onPressed: _updateProduct,
-                      child: const Text("UPDATE DATA", style: TextStyle(color: Colors.white)),
-                    ),
-                  ),
-                ],
-              ),
+      backgroundColor: c.canvas,
+      appBar: AppBar(title: const Text('Edit barang')),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(StokasSpace.s4),
+          children: [
+            TextFormField(
+              initialValue: _id,
+              readOnly: true,
+              decoration: const InputDecoration(labelText: 'Kode', helperText: 'Kode tidak bisa diubah'),
             ),
+            const SizedBox(height: StokasSpace.s3),
+            TextFormField(
+              controller: _name,
+              decoration: const InputDecoration(labelText: 'Nama barang'),
+              validator: (v) => (v ?? '').trim().isEmpty ? 'Nama wajib diisi' : null,
+            ),
+            const SizedBox(height: StokasSpace.s3),
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(labelText: 'Satuan'),
+                    initialValue: _unit,
+                    items: [for (final u in {..._units, _unit}) DropdownMenuItem(value: u, child: Text(u))],
+                    onChanged: (v) => setState(() => _unit = v ?? _unit),
+                  ),
+                ),
+                const SizedBox(width: StokasSpace.s3),
+                Expanded(
+                  flex: 2,
+                  child: DropdownButtonFormField<int?>(
+                    key: ValueKey('edit-category-${categories.length}'),
+                    decoration: const InputDecoration(labelText: 'Kategori'),
+                    initialValue: categories.any((cat) => cat['id'] == _categoryId) ? _categoryId : null,
+                    isExpanded: true,
+                    items: [
+                      const DropdownMenuItem<int?>(value: null, child: Text('Tanpa kategori')),
+                      for (final cat in categories) DropdownMenuItem<int?>(value: cat['id'] as int, child: Text('${cat['name']}')),
+                    ],
+                    onChanged: (v) => setState(() => _categoryId = v),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: StokasSpace.s3),
+            TextFormField(
+              controller: _minStock,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+              decoration: const InputDecoration(labelText: 'Minimum stok'),
+              validator: validateMinStock,
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(color: c.surface, border: Border(top: BorderSide(color: c.line))),
+        padding: const EdgeInsets.all(StokasSpace.s4),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_error != null) ...[FieldError(_error!), const SizedBox(height: StokasSpace.s2)],
+              StokasButton(label: 'Simpan', expand: true, onPressed: _busy ? null : _save),
+            ],
           ),
         ),
       ),
-    );
-  }
-
-  // --- Widget Helper (Sama seperti AddProduct) ---
-  Widget _buildTextField(TextEditingController c, String l, IconData i, {bool isNumber = false, bool isCurrency = false, bool readOnly = false}) {
-    return TextFormField(
-      controller: c,
-      readOnly: readOnly,
-      keyboardType: isCurrency ? TextInputType.number : (isNumber ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text),
-      inputFormatters: isCurrency ? [FilteringTextInputFormatter.digitsOnly, CurrencyInputFormatter()] : null,
-      decoration: InputDecoration(labelText: l, prefixIcon: Icon(i, color: Colors.blue), suffixText: isCurrency ? "IDR" : null),
-      validator: (v) => v!.isEmpty ? "Wajib" : null,
-    );
-  }
-
-  Widget _buildCategoryDropdown() {
-    final categories = ref.watch(categoriesProvider);
-    if (categories.hasError) {
-      return InputDecorator(
-        decoration: InputDecoration(labelText: "Kategori", errorText: categories.error.toString()),
-        child: TextButton.icon(
-          onPressed: () => ref.invalidate(categoriesProvider),
-          icon: const Icon(Icons.refresh),
-          label: const Text("Coba lagi"),
-        ),
-      );
-    }
-    final items = categories.value ?? const <Map<String, dynamic>>[];
-    return DropdownButtonFormField<String>(
-      decoration: const InputDecoration(labelText: "Kategori"),
-      initialValue: _selectedCategory,
-      items: items.map((c) => DropdownMenuItem(value: c['id'].toString(), child: Text(c['name']))).toList(),
-      onChanged: (v) => setState(() => _selectedCategory = v),
-    );
-  }
-
-  Widget _buildUnitDropdown() {
-    return DropdownButtonFormField<String>(
-      decoration: const InputDecoration(labelText: "Satuan"),
-      initialValue: _selectedUnit,
-      items: ['pcs', 'gram', 'liter', 'ml'].map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
-      onChanged: (v) => setState(() => _selectedUnit = v!),
     );
   }
 }

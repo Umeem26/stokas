@@ -9,6 +9,7 @@ import 'package:minimarket_pos/data/repositories/product_repository.dart';
 import 'package:minimarket_pos/data/repositories/profile_repository.dart';
 import 'package:minimarket_pos/data/repositories/stock_repository.dart';
 import 'package:minimarket_pos/data/repositories/transaction_repository.dart';
+import 'package:minimarket_pos/data/revenue.dart';
 import 'package:minimarket_pos/data/transaction_model.dart';
 
 /// Panggilan checkout yang tercatat oleh [FakeTransactionRepository].
@@ -67,8 +68,24 @@ class FakeTransactionRepository implements TransactionRepository {
 
   int get transactionCount => _byKey.length;
 
+  /// Baris omzet untuk [getRevenueRows]; [revenueError] dilempar sekali.
+  final revenueRows = <RevenueRow>[];
+  Object? revenueError;
+  int revenueLoads = 0;
+
   @override
-  Future<List<TransactionModel>> getTodayTransactions(DateTime now) async => _byKey.values.toList();
+  Future<List<RevenueRow>> getRevenueRows(DateTime start, DateTime end) async {
+    revenueLoads++;
+    final error = revenueError;
+    if (error != null) {
+      revenueError = null;
+      throw error;
+    }
+    return [
+      for (final r in revenueRows)
+        if (!r.createdAt.isBefore(start) && r.createdAt.isBefore(end)) r,
+    ];
+  }
 
   @override
   Future<List<TransactionModel>> getTransactionHistory() async => _byKey.values.toList();
@@ -167,7 +184,13 @@ class FakeProductRepository implements ProductRepository {
   Object? nextError;
   final capitalPrices = <String, int>{};
   final deleted = <String>[];
+  final updates = <(ProductModel, bool)>[];
+  final capitalSaves = <(String, int)>[];
   int capitalReads = 0;
+
+  /// Galat untuk updateProduct / getProducts, dilempar sekali.
+  Object? updateError;
+  Object? loadError;
 
   FakeProductRepository([List<Map<String, dynamic>>? products]) : products = products ?? [];
 
@@ -177,7 +200,14 @@ class FakeProductRepository implements ProductRepository {
       ];
 
   @override
-  Future<List<Map<String, dynamic>>> getProducts() async => [for (final p in products) {...p}];
+  Future<List<Map<String, dynamic>>> getProducts() async {
+    final error = loadError;
+    if (error != null) {
+      loadError = null;
+      throw error;
+    }
+    return [for (final p in products) {...p}];
+  }
 
   @override
   Future<void> createProductWithStock(NewProduct product) async {
@@ -192,7 +222,14 @@ class FakeProductRepository implements ProductRepository {
   }
 
   @override
-  Future<void> updateProduct(ProductModel product, {bool includePrices = true}) async {}
+  Future<void> updateProduct(ProductModel product, {bool includePrices = true}) async {
+    updates.add((product, includePrices));
+    final error = updateError;
+    if (error != null) {
+      updateError = null;
+      throw error;
+    }
+  }
 
   @override
   Future<int?> getCapitalPrice(String productId) async {
@@ -201,7 +238,10 @@ class FakeProductRepository implements ProductRepository {
   }
 
   @override
-  Future<void> saveCapitalPrice(String productId, int capitalPrice) async => capitalPrices[productId] = capitalPrice;
+  Future<void> saveCapitalPrice(String productId, int capitalPrice) async {
+    capitalSaves.add((productId, capitalPrice));
+    capitalPrices[productId] = capitalPrice;
+  }
 
   @override
   Future<void> deleteProduct(String productId) async => deleted.add(productId);
