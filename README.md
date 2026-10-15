@@ -56,8 +56,15 @@ Akun staf dibuat owner dari menu **Staf** di Dashboard. Hak akses di aplikasi ha
 1. Clone repositori:
    ```bash
    git clone [https://github.com/Umeem26/Minimarket-Pos-System.git](https://github.com/Umeem26/Minimarket-Pos-System.git)
-2. Konfigurasi proyek Supabase Anda dan masukkan API Key ke dalam proyek.
+2. Salin `.env.example` menjadi `.env`, lalu isi `SUPABASE_URL` dan `SUPABASE_ANON_KEY`.
+   **Gunakan HANYA kunci publishable** (`sb_publishable_...`). `.env` ikut dibundel ke aplikasi
+   (di web bisa diunduh siapa saja); kunci rahasia (`sb_secret_...`/`service_role`) menembus RLS
+   dan ditolak aplikasi saat mulai.
 3. Jalankan perintah:
    ```bash
    flutter pub get
-   flutter run
+   # Web
+   flutter run -d chrome --web-port 8080
+   # Emulator Android
+   flutter emulators --launch <emulator_id>
+   flutter run -d emulator-5554

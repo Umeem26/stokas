@@ -4,22 +4,33 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/date_symbol_data_local.dart'; 
 
+import 'core/supabase_key_guard.dart';
 import 'presentation/auth_gate.dart';
+import 'presentation/config_error_screen.dart';
 import 'presentation/design/stokas_theme.dart';
 
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  await dotenv.load(fileName: ".env");
-  await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
-  );
+  await dotenv.load(fileName: ".env", isOptional: true);
 
   // --- BARIS AJAIB PENYEMBUH ERROR ---
   // Kita "daftarkan" dulu format tanggal Indonesia agar aplikasi tidak kaget
   await initializeDateFormatting('id_ID', null);
+
+  // Penjaga startup (debug & release): kunci kosong / rahasia -> layar galat konfigurasi, bukan Login.
+  final url = dotenv.env['SUPABASE_URL'];
+  final key = dotenv.env['SUPABASE_ANON_KEY'];
+  try {
+    checkSupabaseConfig(url: url, key: key);
+  } on ConfigException catch (e) {
+    debugPrint('❌ $e');
+    runApp(ConfigErrorApp(message: e.message));
+    return;
+  }
+
+  await Supabase.initialize(url: url!, anonKey: key!);
 
   runApp(
     ProviderScope(

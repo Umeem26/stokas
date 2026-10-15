@@ -1,7 +1,14 @@
 # Minimarket POS
 
 Aplikasi kasir & inventori minimarket. Flutter (Dart) + Supabase (Postgres + Storage `product-images`).
-State management: flutter_riverpod. Kredensial dibaca dari `.env` (SUPABASE_URL, SUPABASE_ANON_KEY).
+State management: flutter_riverpod. Kredensial dibaca dari `.env` (SUPABASE_URL, SUPABASE_ANON_KEY), contoh di `.env.example`.
+
+## Kunci Supabase & menjalankan
+- `.env` dibundel sebagai asset (publik di web): SUPABASE_ANON_KEY HANYA kunci publishable (`sb_publishable_...`).
+  Kunci `sb_secret_`/JWT `service_role` ditolak `core/supabase_key_guard.dart` saat mulai -> layar galat konfigurasi.
+- Web: `flutter run -d chrome --web-port 8080`
+- Emulator Android: `flutter emulators --launch <emulator_id>` lalu `flutter run -d emulator-5554`
+- Tes integrasi (`integration_test/`) baru boleh dijalankan setelah Umem konfirmasi kunci sudah diputar.
 
 ## Struktur lib/
 - `main.dart` — init dotenv, Supabase, locale id_ID, `ProviderScope`, tema.

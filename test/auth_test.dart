@@ -67,26 +67,42 @@ void main() {
   });
 
   group('mapSignInError', () {
-    test('kredensial salah', () {
-      final e = mapSignInError(const AuthException('Invalid login credentials', statusCode: '400', code: 'invalid_credentials'));
-      expect(e.message, wrongCredentialsMessage);
-      expect(e.failure, SignInFailure.wrongCredentials);
-    });
+    final cases = <(String, Object, SignInFailure, String)>[
+      ('400 invalid_credentials',
+          AuthApiException('Invalid login credentials', statusCode: '400', code: 'invalid_credentials'),
+          SignInFailure.wrongCredentials, 'Username/email atau password salah. Periksa lalu coba lagi.'),
+      ('401 Invalid API key', AuthApiException('Invalid API key', statusCode: '401'),
+          SignInFailure.apiKey, 'Konfigurasi aplikasi salah: kunci Supabase tidak diterima.'),
+      ('401 kunci rahasia di browser', AuthApiException('Forbidden use of secret API key in browser', statusCode: '401'),
+          SignInFailure.apiKey, apiKeyRejectedMessage),
+      ('akun nonaktif (user_banned)', AuthApiException('User is banned', statusCode: '400', code: 'user_banned'),
+          SignInFailure.inactive, inactiveAccountMessage),
+      ('429 terlalu banyak percobaan', AuthApiException('Request rate limit reached', statusCode: '429', code: 'over_request_rate_limit'),
+          SignInFailure.rateLimited, rateLimitedMessage),
+      ('koneksi: AuthRetryableFetchException', AuthRetryableFetchException(), SignInFailure.network, networkErrorMessage),
+      ('koneksi: web Failed to fetch', Exception('ClientException: Failed to fetch'), SignInFailure.network, networkErrorMessage),
+      ('auth tak dikenal tetap menyebut kode', AuthApiException('boom', statusCode: '500', code: 'unexpected_failure'),
+          SignInFailure.other, unknownSignInMessage('unexpected_failure')),
+      ('auth tanpa kode menyebut status HTTP', AuthApiException('boom', statusCode: '503'),
+          SignInFailure.other, unknownSignInMessage('HTTP 503')),
+      ('galat non-auth menyebut tipenya', StateError('boom'), SignInFailure.other, unknownSignInMessage('StateError')),
+    ];
 
-    test('jaringan putus', () {
-      expect(mapSignInError(AuthRetryableFetchException()).message, networkErrorMessage);
-      expect(mapSignInError(AuthRetryableFetchException()).failure, SignInFailure.network);
-    });
+    for (final (name, error, failure, message) in cases) {
+      test(name, () {
+        final e = mapSignInError(error);
+        expect(e.failure, failure);
+        expect(e.message, message);
+        expect(e.cause, same(error));
+      });
+    }
 
-    test('akun diblokir (nonaktif)', () {
-      final e = mapSignInError(const AuthException('User is banned', statusCode: '400', code: 'user_banned'));
-      expect(e.message, inactiveAccountMessage);
-      expect(e.failure, SignInFailure.inactive);
-    });
-
-    test('error lain menjadi pesan generik', () {
-      expect(mapSignInError(StateError('boom')).message, genericSignInMessage);
-      expect(mapSignInError(StateError('boom')).failure, SignInFailure.other);
+    test('setiap jenis galat punya pesan berbeda', () {
+      final messages = {
+        for (final (_, error, failure, _) in cases) failure: mapSignInError(error).message,
+      };
+      expect(messages.keys.toSet(), SignInFailure.values.toSet());
+      expect(messages.values.toSet().length, SignInFailure.values.length);
     });
   });
 

@@ -26,3 +26,6 @@ Thumbs.db
 
 # Kredensial tes integrasi (lokal saja)
 integration_test/env.test.json
+
+# Contoh tanpa secret boleh di-commit
+!.env.example

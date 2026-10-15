@@ -8,12 +8,16 @@ import '../../core/app_exception.dart';
 import '../../core/config.dart';
 
 const inactiveAccountMessage = 'Akun dinonaktifkan atau tidak ditemukan. Hubungi owner.';
-const wrongCredentialsMessage = 'Username atau password salah. Periksa lalu coba lagi.';
+const wrongCredentialsMessage = 'Username/email atau password salah. Periksa lalu coba lagi.';
 const networkErrorMessage = 'Tidak ada koneksi. Periksa internet, lalu coba lagi.';
-const genericSignInMessage = 'Gagal masuk. Coba lagi.';
+const apiKeyRejectedMessage = 'Konfigurasi aplikasi salah: kunci Supabase tidak diterima.';
+const rateLimitedMessage = 'Terlalu banyak percobaan masuk. Tunggu sebentar, lalu coba lagi.';
+
+/// Galat tak dikenal tetap membawa kodenya agar tidak tertukar dengan galat lain.
+String unknownSignInMessage(String code) => 'Gagal masuk (kode: $code). Coba lagi atau hubungi owner.';
 
 /// Jenis kegagalan login; layar Login memilih ikon dari sini.
-enum SignInFailure { wrongCredentials, network, inactive, other }
+enum SignInFailure { wrongCredentials, network, inactive, apiKey, rateLimited, other }
 
 /// Galat login bertipe dengan pesan ramah (tidak pernah memuat password).
 class SignInException extends AppException {
@@ -38,21 +42,28 @@ abstract class AuthRepository {
 }
 
 /// Terjemahkan error login menjadi pesan Indonesia. Tidak pernah memuat password.
+/// Setiap jenis punya pesan sendiri; yang tak dikenal tetap menyebut kodenya.
 SignInException mapSignInError(Object error) {
-  if (error is AuthRetryableFetchException || error is SocketException || error is TimeoutException) {
+  if (error is AuthRetryableFetchException || error is SocketException || isNetworkError(error)) {
     return SignInException(SignInFailure.network, networkErrorMessage, error);
   }
   if (error is AuthException) {
-    if (error.code == 'invalid_credentials' || error.message.toLowerCase().contains('invalid login credentials')) {
+    final message = error.message.toLowerCase();
+    if (error.code == 'invalid_credentials' || message.contains('invalid login credentials')) {
       return SignInException(SignInFailure.wrongCredentials, wrongCredentialsMessage, error);
     }
+    // 401: kunci API ditolak (salah, kosong, atau kunci rahasia dipakai di browser).
+    if (error.statusCode == '401' || message.contains('api key')) {
+      return SignInException(SignInFailure.apiKey, apiKeyRejectedMessage, error);
+    }
     if (error.code == 'user_banned') return SignInException(SignInFailure.inactive, inactiveAccountMessage, error);
+    if (error.statusCode == '429' || error.code == 'over_request_rate_limit') {
+      return SignInException(SignInFailure.rateLimited, rateLimitedMessage, error);
+    }
+    final code = error.code ?? (error.statusCode != null ? 'HTTP ${error.statusCode}' : 'auth');
+    return SignInException(SignInFailure.other, unknownSignInMessage(code), error);
   }
-  final text = error.toString().toLowerCase();
-  if (text.contains('socketexception') || text.contains('failed host lookup') || text.contains('clientexception')) {
-    return SignInException(SignInFailure.network, networkErrorMessage, error);
-  }
-  return SignInException(SignInFailure.other, genericSignInMessage, error);
+  return SignInException(SignInFailure.other, unknownSignInMessage('${error.runtimeType}'), error);
 }
 
 class SupabaseAuthRepository implements AuthRepository {

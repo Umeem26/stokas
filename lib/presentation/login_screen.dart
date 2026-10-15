@@ -192,6 +192,8 @@ IconData signInFailureIcon(SignInFailure failure) => switch (failure) {
       SignInFailure.wrongCredentials => Icons.key_off_outlined,
       SignInFailure.network => Icons.wifi_off,
       SignInFailure.inactive => Icons.block,
+      SignInFailure.apiKey => Icons.vpn_key_off_outlined,
+      SignInFailure.rateLimited => Icons.hourglass_empty,
       SignInFailure.other => Icons.error_outline,
     };
 
