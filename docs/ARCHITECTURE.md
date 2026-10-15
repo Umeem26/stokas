@@ -1,6 +1,6 @@
 # Architecture
 
-Schema after migrations 0001–0005 in [`supabase/migrations/`](../supabase/migrations), plus
+Schema after migrations 0001–0006 in [`supabase/migrations/`](../supabase/migrations), plus
 [`supabase/functions/staff-admin`](../supabase/functions/staff-admin).
 
 ## System
@@ -55,8 +55,8 @@ erDiagram
     text brand_name
     int category_id FK
     numeric min_stock
-    bigint price "Rupiah"
-    boolean is_deleted "soft delete"
+    bigint price "Rupiah; > 0 owner-only"
+    boolean is_deleted "soft delete, owner-only"
   }
   product_costs {
     text product_id PK
@@ -98,7 +98,10 @@ erDiagram
 
 Constraints worth knowing: `stocks` is unique on `(product_id, floor_name, coalesce(expiry_date, 'infinity'))`,
 so one row is one batch. `authenticated` has no `INSERT/UPDATE/DELETE` on `stocks`, `transactions`,
-`transaction_items` or `stock_movements`, and no `DELETE` on `products`.
+`transaction_items` or `stock_movements`, and no `INSERT` or `DELETE` on `products` (0004, 0006).
+New products are created only through `create_product_with_stock` (`SECURITY DEFINER`; price > 0 owner-only);
+`products` keeps `SELECT`/`UPDATE` for owner and warehouse, and the `products_guard_prices` trigger
+limits price and `is_deleted` changes to the owner.
 
 ## Checkout sequence
 
@@ -135,11 +138,11 @@ sequenceDiagram
 |---|---|---|---|---|
 | `profiles` | read all, update | read self | read self | RLS; trigger blocks changing own role/status |
 | `categories` | read, write, delete | read | read, insert, update | RLS |
-| `products` | read, insert, update | read | read, insert, update | RLS; trigger: price and `is_deleted` owner-only |
+| `products` | read, update | read | read, update | RLS; no `INSERT` grant (create via RPC, 0006); trigger: price and `is_deleted` owner-only |
 | `product_costs` | all | — | — | RLS |
 | `stocks` | read | read | read | RLS; writes via RPC |
 | `restock`, `stock_count`, `transfer_stock` | ✅ | — | ✅ | role check inside RPC |
-| `create_product_with_stock` | ✅ | — | ✅ (price 0) | role check inside RPC |
+| `create_product_with_stock` | ✅ | — | ✅ (price 0) | `SECURITY DEFINER`; role and price check inside RPC |
 | `checkout` | ✅ | ✅ | — | role check inside RPC |
 | `transactions`, `transaction_items` | read all | read own | — | RLS |
 | `stock_movements` | read | — | read | RLS; writes via RPC |

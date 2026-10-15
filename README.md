@@ -42,7 +42,7 @@ Taken from the RLS policies, triggers and RPC checks in [`supabase/migrations/`]
 | Checkout (`checkout` RPC) | ✅ | ✅ | — |
 | Read transactions | All | Own only | — |
 | Receive / count / transfer stock (`restock`, `stock_count`, `transfer_stock`) | ✅ | — | ✅ |
-| Create product (`create_product_with_stock`) | ✅ | — | ✅ (price 0 only) |
+| Create product (only via `create_product_with_stock`; no direct `INSERT`) | ✅ | — | ✅ (price 0 only) |
 | Edit product fields | ✅ | — | ✅ (not price) |
 | Change price or delete product (soft) | ✅ | — | — |
 | Read/write cost price (`product_costs`) | ✅ | — | — |
@@ -73,7 +73,7 @@ More detail (ERD, checkout sequence, role matrix): [docs/ARCHITECTURE.md](docs/A
 
 1. **Atomic checkout with an idempotency key.** The `checkout` RPC recomputes the total from database prices, locks stock rows (`FOR UPDATE`), deducts stock and writes the transaction, its items and ledger rows in one database transaction. The client sends a UUID v4 key that stays the same on retry and changes when the cart changes or after success ([`checkout_controller.dart`](lib/data/checkout_controller.dart)); a unique `transactions.idempotency_key` makes a repeated call return the existing receipt instead of a second sale.
 2. **Money is `bigint` Rupiah.** Migration 0004 converts every money column to `bigint`; the app uses `int` and formats only through `formatRupiah` ([`core/format.dart`](lib/core/format.dart)). Quantities stay `numeric` for items sold by weight.
-3. **Prices are guarded in the database.** A `BEFORE UPDATE` trigger rejects price and `is_deleted` changes from non-owners, and cost price lives in a separate owner-only table (`product_costs`). The app creates products through the `create_product_with_stock` RPC, which inserts the product and its initial stock atomically and rejects a non-zero price from anyone but the owner.
+3. **Prices are guarded in the database.** A `BEFORE UPDATE` trigger rejects price and `is_deleted` changes from non-owners, and cost price lives in a separate owner-only table (`product_costs`). New products can only be created through the `create_product_with_stock` RPC (`SECURITY DEFINER`), which inserts the product and its initial stock atomically and accepts a price above 0 only from the owner. Migration 0006 drops the `products_insert` policy and revokes `INSERT` on `products`, so warehouse staff have only `SELECT` and `UPDATE` there, with price and `is_deleted` guarded by the `products_guard_prices` trigger.
 4. **Stock batches with FEFO and a ledger.** Stock is one row per (product, floor, expiry date). Checkout takes from the earliest-expiring batch first and skips expired ones (date in Asia/Jakarta). Every change writes a `stock_movements` row (`sale`, `restock`, `opname`, `transfer_in`, `transfer_out`). Direct `INSERT/UPDATE/DELETE` on stock and transaction tables is revoked; writes go through RPCs only.
 5. **Staff admin runs server-side.** Creating staff, resetting passwords and (de)activating accounts needs the service role key, so it lives in the `staff-admin` Edge Function, which first checks that the caller is an active owner. The app itself refuses to start with a secret key ([`supabase_key_guard.dart`](lib/core/supabase_key_guard.dart)).
 
@@ -97,7 +97,7 @@ deno test supabase/functions/staff-admin/
 ## Getting started
 
 1. Install Flutter (stable channel) and create a Supabase project.
-2. Apply the SQL files in [`supabase/migrations/`](supabase/migrations) in order (0001 → 0005) on a fresh project, create the `product-images` storage bucket, and deploy `supabase/functions/staff-admin`.
+2. Apply the SQL files in [`supabase/migrations/`](supabase/migrations) in order (0001 → 0006) on a fresh project, create the `product-images` storage bucket, and deploy `supabase/functions/staff-admin`.
 3. Copy `.env.example` to `.env` and fill in `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
 
 > [!WARNING]
