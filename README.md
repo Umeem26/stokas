@@ -1,70 +1,142 @@
-<div align="center">
-  <img src="https://img.shields.io/badge/Flutter-%2302569B.svg?style=for-the-badge&logo=Flutter&logoColor=white" />
-  <img src="https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white" />
-  <img src="https://img.shields.io/badge/Status-Active%20Development-orange?style=for-the-badge" />
-  
-  <br />
-  <h1>🛒 Minimarket POS & Inventory System</h1>
-  <p><i>"Enterprise-grade Point of Sale solution with real-time inventory precision."</i></p>
-</div>
+# Stokas
 
----
+[![CI](https://github.com/Umeem26/stokas/actions/workflows/ci.yml/badge.svg)](https://github.com/Umeem26/stokas/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Flutter](https://img.shields.io/badge/Flutter-stable-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 
-### 📋 Overview
-Aplikasi ini adalah sistem **Point of Sale (POS)** dan **Manajemen Inventaris** tingkat profesional yang dibangun menggunakan Flutter dan Supabase. Dirancang khusus untuk menangani kompleksitas operasional minimarket modern, mulai dari pelacakan stok di berbagai lantai hingga pemantauan ketat terhadap masa kedaluwarsa produk.
+> **Uang dan barang, satu catatan.**
+> *Money and goods, one record.*
 
-### ✨ Fitur Unggulan
-- **Real-time Stock Tracking:** Pemantauan stok barang secara instan yang tersinkronisasi di seluruh lantai operasional.
-- **Expiry Monitoring:** Sistem peringatan dini untuk produk dengan masa simpan terbatas, khususnya kategori *frozen food*.
-- **Integrated POS:** Proses transaksi penjualan yang cepat dan terhubung langsung dengan pembaruan stok otomatis.
-- **Supabase Backend:** Memanfaatkan database real-time dan sistem autentikasi yang aman dari Supabase.
-- **Image Integration:** Dilengkapi fitur pengambil gambar untuk pendataan produk yang lebih visual.
+Stokas is a point-of-sale and inventory app for a small Indonesian minimarket, built with Flutter and Supabase.
+It is meant for the three people who run such a store day to day: the owner, the cashier and the warehouse staff, each with their own screens and database-enforced permissions.
 
-### 🛠️ Tech Stack
-- **Frontend:** [Flutter](https://flutter.dev/) (Android & iOS)
-- **Backend/Database:** [Supabase](https://supabase.com/)
-- **Language:** [Dart](https://dart.dev/)
-- **Features:** Image Picker & Android Manifest optimized for release.
+## Features
 
-### 🗄️ Folder `supabase/`
-- `migrations/0001_baseline.sql` — skema awal (`categories`, `products`, `stocks`, `transactions`, `transaction_items`) sesuai kondisi 13 Oktober 2026, tanpa RLS.
-- `migrations/0002_auth_roles_rls.sql` — tabel `profiles`, peran (`owner`/`cashier`/`warehouse`), kolom `transactions.cashier_id`, dan RLS di semua tabel.
-- `migrations/0003_storage_policies.sql` — kebijakan akses bucket `product-images`.
-- `migrations/0004_checkout_stock_rpc.sql` — uang jadi `bigint` (Rupiah bulat), harga modal pindah ke `product_costs` (khusus owner), batch stok per (produk, lantai, kedaluwarsa), audit `stock_movements`, serta RPC `checkout`, `restock`, `stock_count`, `transfer_stock`.
-- `functions/staff-admin` — Edge Function untuk owner: tambah staf, reset password, aktif/nonaktifkan akun.
-
-File-file ini adalah dokumentasi dari yang sudah diterapkan ke proyek Supabase; tidak dijalankan otomatis oleh aplikasi maupun CI.
-
-### 🔐 Peran & Login
-Semua pengguna wajib login. Staf login dengan **username** (dipetakan ke email `username@staff.pos.invalid`); owner boleh login dengan email biasa. Sesi tersimpan di perangkat sehingga tidak perlu login ulang setiap membuka aplikasi. Akun yang dinonaktifkan otomatis dikeluarkan.
-
-| Peran | Beranda | Akses |
+| Area | Feature | Status |
 |---|---|---|
-| Owner | Dashboard | Semua layar, ubah harga, lihat harga modal, kelola staf |
-| Kasir | Kasir | Kasir, riwayat transaksi sendiri, lihat stok |
-| Gudang | Stok | Tambah/edit/mutasi stok; tidak bisa mengubah harga dan tidak melihat harga modal |
+| Access | Login for owner (email) and staff (username), session kept on device, deactivated accounts signed out | Done |
+| Access | Three roles with role-specific navigation; side rail at >= 768 px, bottom tabs below | Done |
+| Cashier | Cart with product search by name or code | Done |
+| Cashier | USB barcode scanner input (keyboard-wedge, detected by keystroke timing) | Done |
+| Cashier | Cash with quick-cash buttons, QRIS and bank transfer (exact amount, two-step confirm) | Done |
+| Cashier | Atomic server-side checkout with idempotency key (safe retry after network failure) | Done |
+| Cashier | 80 mm PDF receipt, transaction history (cashiers see only their own) | Done |
+| Cashier | Keyboard-first PC layout (Enter / Esc) | Done |
+| Stock | Batches per product, floor and expiry date; FEFO deduction; expired batches not sellable | Done |
+| Stock | Expiry labels and low-stock badges (at or below minimum stock) | Done |
+| Warehouse | Receive goods (multiple lines), new product with initial stock | Done |
+| Warehouse | Stock count (opname), transfer between floors, write-off of expired batches | Done |
+| Owner | Home: today's revenue vs. yesterday and a "Needs attention" list | Done |
+| Owner | Product detail: selling price, cost price, batches; soft delete | Done |
+| Owner | Staff accounts: create, reset password, activate/deactivate | Done |
+| UI | Light and dark theme (follows system), product images in Supabase Storage | Done |
+| — | Items in [Roadmap](#roadmap) | Planned |
 
-Akun staf dibuat owner dari menu **Staf** di Dashboard. Hak akses di aplikasi hanya menyembunyikan menu; penjagaan sebenarnya ada di RLS database.
+## Roles and permissions
 
-### 🧾 Checkout & Stok (Fase 2)
-- **Checkout atomik** lewat RPC `checkout`: total dihitung server, stok dipotong FEFO (kedaluwarsa terdekat dulu), batch kedaluwarsa dilewati. Setiap keranjang membawa kunci idempotensi (UUID v4) sehingga menekan Bayar ulang setelah gagal jaringan tidak membuat transaksi ganda.
-- **Stok hanya diubah lewat RPC**: Stok masuk (`restock`), Opname (`stock_count`), dan Mutasi (`transfer_stock`) — menu ⋮ di tiap batch pada layar Stok (owner/gudang). Batch kedaluwarsa diberi label *Kedaluwarsa* dan tidak dihitung tersedia di Kasir.
-- **Uang = int Rupiah** di seluruh aplikasi; nota & riwayat memakai snapshot nama/harga barang. "Hari ini" dihitung dari tengah malam Asia/Jakarta.
-- **Harga modal** disimpan di `product_costs` dan hanya dibaca/diisi owner. Hapus barang = soft delete (`is_deleted`).
+Taken from the RLS policies, triggers and RPC checks in [`supabase/migrations/`](supabase/migrations). The app hides menus with `can(role, Permission)` in [`lib/core/permissions.dart`](lib/core/permissions.dart); the database is the real gate.
 
-### ⚙️ Instalasi & Persiapan
-1. Clone repositori:
-   ```bash
-   git clone [https://github.com/Umeem26/Minimarket-Pos-System.git](https://github.com/Umeem26/Minimarket-Pos-System.git)
-2. Salin `.env.example` menjadi `.env`, lalu isi `SUPABASE_URL` dan `SUPABASE_ANON_KEY`.
-   **Gunakan HANYA kunci publishable** (`sb_publishable_...`). `.env` ikut dibundel ke aplikasi
-   (di web bisa diunduh siapa saja); kunci rahasia (`sb_secret_...`/`service_role`) menembus RLS
-   dan ditolak aplikasi saat mulai.
-3. Jalankan perintah:
-   ```bash
-   flutter pub get
-   # Web
-   flutter run -d chrome --web-port 8080
-   # Emulator Android
-   flutter emulators --launch <emulator_id>
-   flutter run -d emulator-5554
+| Capability | Owner | Cashier | Warehouse |
+|---|:-:|:-:|:-:|
+| Read products, categories, stock batches | ✅ | ✅ | ✅ |
+| Checkout (`checkout` RPC) | ✅ | ✅ | — |
+| Read transactions | All | Own only | — |
+| Receive / count / transfer stock (`restock`, `stock_count`, `transfer_stock`) | ✅ | — | ✅ |
+| Create product (`create_product_with_stock`) | ✅ | — | ✅ (price 0 only) |
+| Edit product fields | ✅ | — | ✅ (not price) |
+| Change price or delete product (soft) | ✅ | — | — |
+| Read/write cost price (`product_costs`) | ✅ | — | — |
+| Read stock ledger (`stock_movements`) | ✅ | — | ✅ |
+| Upload product images | ✅ | — | ✅ |
+| Manage staff (`staff-admin` Edge Function, `profiles` update) | ✅ | — | — |
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph Client["Flutter app (Android / Web)"]
+    UI["presentation/<br/>screens per role"] --> P["Riverpod providers"]
+    P --> R["data/repositories/<br/>(only place that calls Supabase)"]
+  end
+  R -->|"SELECT under RLS"| DB[("Postgres<br/>tables + RLS")]
+  R -->|"RPC: checkout, restock,<br/>stock_count, transfer_stock,<br/>create_product_with_stock"| DB
+  R -->|"upload / read"| ST["Storage<br/>product-images"]
+  R -->|"invoke (user JWT)"| EF["Edge Function<br/>staff-admin"]
+  EF -->|"service role key<br/>(server-side only)"| AUTH["Supabase Auth"]
+  EF --> DB
+  R -->|"sign in"| AUTH
+```
+
+More detail (ERD, checkout sequence, role matrix): [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Engineering decisions
+
+1. **Atomic checkout with an idempotency key.** The `checkout` RPC recomputes the total from database prices, locks stock rows (`FOR UPDATE`), deducts stock and writes the transaction, its items and ledger rows in one database transaction. The client sends a UUID v4 key that stays the same on retry and changes when the cart changes or after success ([`checkout_controller.dart`](lib/data/checkout_controller.dart)); a unique `transactions.idempotency_key` makes a repeated call return the existing receipt instead of a second sale.
+2. **Money is `bigint` Rupiah.** Migration 0004 converts every money column to `bigint`; the app uses `int` and formats only through `formatRupiah` ([`core/format.dart`](lib/core/format.dart)). Quantities stay `numeric` for items sold by weight.
+3. **Prices are guarded in the database.** A `BEFORE UPDATE` trigger rejects price and `is_deleted` changes from non-owners, and cost price lives in a separate owner-only table (`product_costs`). The app creates products through the `create_product_with_stock` RPC, which inserts the product and its initial stock atomically and rejects a non-zero price from anyone but the owner.
+4. **Stock batches with FEFO and a ledger.** Stock is one row per (product, floor, expiry date). Checkout takes from the earliest-expiring batch first and skips expired ones (date in Asia/Jakarta). Every change writes a `stock_movements` row (`sale`, `restock`, `opname`, `transfer_in`, `transfer_out`). Direct `INSERT/UPDATE/DELETE` on stock and transaction tables is revoked; writes go through RPCs only.
+5. **Staff admin runs server-side.** Creating staff, resetting passwords and (de)activating accounts needs the service role key, so it lives in the `staff-admin` Edge Function, which first checks that the caller is an active owner. The app itself refuses to start with a secret key ([`supabase_key_guard.dart`](lib/core/supabase_key_guard.dart)).
+
+## Testing
+
+| Suite | Count | Where | In CI |
+|---|---|---|---|
+| Flutter unit and widget tests (fake repositories) | 316 passing | `test/` (23 files) | Yes |
+| End-to-end integration tests on an Android emulator against a Supabase project | 10 | `integration_test/app_test.dart` | No |
+| Edge Function unit tests (`node:test`) | 4 | `supabase/functions/staff-admin/create_staff.test.ts` | No |
+
+```bash
+flutter analyze
+flutter test
+# Integration tests: copy integration_test/env.test.example.json to env.test.json and fill in test accounts
+flutter test integration_test/app_test.dart -d emulator-5554 --dart-define-from-file=integration_test/env.test.json
+# Edge Function
+deno test supabase/functions/staff-admin/
+```
+
+## Getting started
+
+1. Install Flutter (stable channel) and create a Supabase project.
+2. Apply the SQL files in [`supabase/migrations/`](supabase/migrations) in order (0001 → 0005) on a fresh project, create the `product-images` storage bucket, and deploy `supabase/functions/staff-admin`.
+3. Copy `.env.example` to `.env` and fill in `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
+
+> [!WARNING]
+> `.env` is bundled into the app as an asset and can be downloaded by anyone on the web build.
+> Use **only the publishable key** (`sb_publishable_...`). Secret keys (`sb_secret_...`) and `service_role` JWTs bypass RLS; the app rejects them at startup.
+
+4. Run:
+
+```bash
+flutter pub get
+# Web
+flutter run -d chrome --web-port 8080
+# Android emulator
+flutter emulators --launch <emulator_id>
+flutter run -d emulator-5554
+```
+
+## Roadmap
+
+| Item | Status |
+|---|---|
+| Returns and voiding a transaction | Planned |
+| Gap-free receipt numbering | Planned |
+| Server-side revenue aggregation and sales reports | Planned |
+| Stock movement history in the app (ledger already recorded) | Planned |
+| Offline mode for the cashier | Planned |
+| Camera barcode scanning on mobile | Planned |
+
+## Known limitations
+
+- No returns or voids: a completed sale cannot be reversed in the app.
+- Receipt numbers come from a Postgres sequence and can skip numbers (e.g. after a failed checkout).
+- Revenue on the owner home screen is summed on the client from the day's transactions.
+- No offline mode: the app needs a network connection to Supabase.
+
+## Background
+
+Stokas started as a build for a friend's store; it is now maintained independently.
+
+## License
+
+Code is licensed under [MIT](LICENSE). The Stokas name and logo are not covered by the license.
