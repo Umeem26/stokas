@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { createStaff, type StaffAdminClient } from "./create_staff.ts";
 
 // Samakan dengan konstanta di aplikasi. TLD .invalid dicadangkan standar internet.
 const STAFF_EMAIL_DOMAIN = "staff.pos.invalid";
@@ -59,18 +60,9 @@ Deno.serve(async (req) => {
     if (password.length < 8) return json({ error: "Password minimal 8 karakter" }, 400);
 
     const email = username.includes("@") ? username : `${username}@${STAFF_EMAIL_DOMAIN}`;
-    const { data, error } = await admin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      app_metadata: { role },
-      user_metadata: { full_name: fullName },
-    });
-    if (error) {
-      const dup = /already|registered|exists/i.test(error.message);
-      return json({ error: dup ? "Username sudah dipakai" : error.message }, dup ? 409 : 400);
-    }
-    return json({ id: data.user.id, email });
+    const res = await createStaff(admin as unknown as StaffAdminClient, { email, password, role, fullName });
+    if (!res.ok) return json({ error: res.error }, res.status);
+    return json({ id: res.id, email });
   }
 
   if (action === "set_password") {
