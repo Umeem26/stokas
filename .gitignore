@@ -23,3 +23,6 @@ Pods/
 Thumbs.db
 # IDE (per-user)
 .idea/workspace.xml
+
+# Kredensial tes integrasi (lokal saja)
+integration_test/env.test.json
