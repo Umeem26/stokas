@@ -32,6 +32,9 @@ Future<void> main() async {
 
 final _navigatorKey = GlobalKey<NavigatorState>();
 
+Route<void> _gateRoute(String? path) =>
+    MaterialPageRoute(builder: (_) => AuthGate(navigatorKey: _navigatorKey, initialPath: path));
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -47,12 +50,11 @@ class MyApp extends StatelessWidget {
       darkTheme: StokasTheme.dark,
       themeMode: ThemeMode.system,
 
-      // Pintu Masuk -> Login / beranda sesuai peran
-      home: AuthGate(navigatorKey: _navigatorKey),
-      // Rute awal (mis. /staf di web) diteruskan ke AuthGate, bukan ditumpuk sebagai layar.
-      onGenerateInitialRoutes: (path) => [
-        MaterialPageRoute(builder: (_) => AuthGate(navigatorKey: _navigatorKey, initialPath: path)),
-      ],
+      // Pintu masuk -> Login / beranda sesuai peran. Tanpa `home` (tidak boleh bersama
+      // onGenerateInitialRoutes): rute awal (mis. /staf di web) diteruskan ke AuthGate,
+      // bukan ditumpuk sebagai layar.
+      onGenerateInitialRoutes: (path) => [_gateRoute(path)],
+      onGenerateRoute: (settings) => _gateRoute(settings.name),
     );
   }
 }
