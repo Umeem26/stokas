@@ -5,7 +5,51 @@ import 'package:minimarket_pos/core/validators.dart';
 import 'package:minimarket_pos/data/repositories/auth_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Klien Supabase palsu: merekam email yang dikirim ke signInWithPassword (password tidak disimpan).
+class _RecordingGoTrue extends Fake implements GoTrueClient {
+  final emails = <String?>[];
+  Object? error;
+
+  @override
+  Future<AuthResponse> signInWithPassword({String? email, String? phone, required String password, String? captchaToken}) async {
+    emails.add(email);
+    if (error != null) throw error!;
+    return AuthResponse();
+  }
+}
+
+class _FakeSupabase extends Fake implements SupabaseClient {
+  @override
+  final _RecordingGoTrue auth = _RecordingGoTrue();
+}
+
 void main() {
+  group('SupabaseAuthRepository.signIn: email yang dikirim ke Supabase', () {
+    for (final (input, email) in [
+      ('test@gmail.com', 'test@gmail.com'),
+      ('  test@gmail.com ', 'test@gmail.com'),
+      ('Test@Gmail.com', 'Test@Gmail.com'),
+      ('kasir1', 'kasir1@staff.pos.invalid'),
+      (' Kasir1 ', 'kasir1@staff.pos.invalid'),
+    ]) {
+      test('"$input" -> $email', () async {
+        final client = _FakeSupabase();
+        await SupabaseAuthRepository(client).signIn(input, 'rahasia123');
+        expect(client.auth.emails, [email]);
+      });
+    }
+
+    test('password salah -> galat kredensial, email tetap utuh', () async {
+      final client = _FakeSupabase();
+      client.auth.error = const AuthException('Invalid login credentials', statusCode: '400', code: 'invalid_credentials');
+      await expectLater(
+        SupabaseAuthRepository(client).signIn('test@gmail.com', 'salah'),
+        throwsA(isA<SignInException>().having((e) => e.failure, 'failure', SignInFailure.wrongCredentials)),
+      );
+      expect(client.auth.emails, ['test@gmail.com']);
+    });
+  });
+
   group('usernameToEmail', () {
     test('username biasa memakai domain staf', () {
       expect(usernameToEmail('budi'), 'budi@$staffEmailDomain');

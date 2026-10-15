@@ -56,14 +56,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _error = null;
     });
 
+    SignInException? failure;
     try {
       // Sukses -> gerbang sesi pindah ke beranda lewat onAuthStateChange.
       await ref.read(authRepositoryProvider).signIn(_identifierController.text, _passwordController.text);
       TextInput.finishAutofillContext();
     } catch (e) {
-      if (mounted) setState(() => _error = e is SignInException ? e : SignInException(SignInFailure.other, '$e', e));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      failure = e is SignInException ? e : SignInException(SignInFailure.other, '$e', e);
+    }
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+      if (failure != null) _error = failure;
+    });
+    if (failure != null) {
+      // Siap ketik ulang: password terfokus dan terseleksi.
+      _passwordController.selection = TextSelection(baseOffset: 0, extentOffset: _passwordController.text.length);
+      _passwordFocus.requestFocus();
     }
   }
 
@@ -113,7 +122,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               TextFormField(
                                 key: const Key('login-identifier'),
                                 controller: _identifierController,
-                                enabled: !_isLoading,
+                                // Sengaja tidak dikunci saat memproses (enabled/readOnly): di web input DOM
+                                // dilepas sehingga setelah gagal masuk ketikan berikutnya hilang.
                                 keyboardType: TextInputType.emailAddress,
                                 autocorrect: false,
                                 autofillHints: const [AutofillHints.username, AutofillHints.email],
@@ -130,13 +140,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 key: const Key('login-password'),
                                 controller: _passwordController,
                                 focusNode: _passwordFocus,
-                                enabled: !_isLoading,
                                 obscureText: _obscurePassword,
                                 autocorrect: false,
                                 enableSuggestions: false,
                                 autofillHints: const [AutofillHints.password],
                                 textInputAction: TextInputAction.done,
-                                onFieldSubmitted: (_) => _submit(),
+                                // onEditingComplete (bukan onFieldSubmitted): Enter tidak melepas fokus.
+                                onEditingComplete: _submit,
                                 decoration: InputDecoration(
                                   labelText: 'Password',
                                   prefixIcon: const Icon(Icons.lock_outline),

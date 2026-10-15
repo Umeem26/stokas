@@ -272,6 +272,9 @@ class FakeAuthRepository implements AuthRepository {
     _controller.add(AuthChange.signedIn);
   }
 
+  /// Event dari luar (mis. siaran antar-tab Supabase di web) tanpa memanggil signIn/signOut.
+  void emit(AuthChange change) => _controller.add(change);
+
   @override
   Future<void> signOut() async {
     signOutCalls++;
