@@ -304,12 +304,87 @@ void main() {
       expect(cartOf(tester).quantityOf('A1'), 1, reason: '+/-/Del tidak aktif di kolom lain');
     });
 
+    group('pengaman QRIS/Transfer', () {
+      FocusNode confirmFocus(WidgetTester tester) =>
+          tester.widget<FilledButton>(find.descendant(of: find.byKey(const Key('pay-confirm')), matching: find.byType(FilledButton))).focusNode!;
+      bool ringShown(WidgetTester tester) =>
+          find.descendant(of: find.byKey(const Key('pay-confirm')), matching: find.byKey(const ValueKey('stokasFocusRing'))).evaluate().isNotEmpty;
+
+      Future<FakeTransactionRepository> openPay(WidgetTester tester, String methodKey) async {
+        final tx = await pumpKasir(tester);
+        await searchEnter(tester, 'A1');
+        await key(tester, LogicalKeyboardKey.enter);
+        await tapKey(tester, ValueKey('method-$methodKey'));
+        return tx;
+      }
+
+      for (final method in ['qris', 'transfer']) {
+        testWidgets('$method: Enter sekali tidak mencatat, hanya memfokuskan "Sudah dibayar" (cincin terlihat)', (tester) async {
+          final tx = await openPay(tester, method);
+          expect(find.text('Sudah dibayar'), findsOneWidget);
+          expect(confirmFocus(tester).hasFocus, isFalse);
+
+          await key(tester, LogicalKeyboardKey.enter);
+          expect(tx.calls, isEmpty);
+          expect(confirmFocus(tester).hasFocus, isTrue);
+          expect(ringShown(tester), isTrue);
+          expect(find.byKey(const Key('pay-panel')), findsOneWidget);
+        });
+
+        testWidgets('$method: Enter dua kali mencatat tepat sekali', (tester) async {
+          final tx = await openPay(tester, method);
+          await key(tester, LogicalKeyboardKey.enter);
+          await key(tester, LogicalKeyboardKey.numpadEnter);
+          expect(tx.calls, hasLength(1));
+          expect(tx.calls.single.method.code, method);
+          expect(find.byKey(const Key('checkout-done')), findsOneWidget);
+        });
+      }
+
+      testWidgets('ganti cara bayar mengembalikan fokus awal: Enter lagi tidak mencatat', (tester) async {
+        final tx = await openPay(tester, 'qris');
+        await key(tester, LogicalKeyboardKey.enter);
+        expect(confirmFocus(tester).hasFocus, isTrue);
+
+        await key(tester, LogicalKeyboardKey.digit3, character: '3'); // Transfer
+        expect(confirmFocus(tester).hasFocus, isFalse);
+        await key(tester, LogicalKeyboardKey.enter);
+        expect(tx.calls, isEmpty);
+        expect(confirmFocus(tester).hasFocus, isTrue);
+
+        await tapKey(tester, const ValueKey('method-qris'));
+        expect(confirmFocus(tester).hasFocus, isFalse);
+        await key(tester, LogicalKeyboardKey.enter);
+        expect(tx.calls, isEmpty);
+
+        await key(tester, LogicalKeyboardKey.digit1, character: '1'); // Tunai: kolom uang terfokus
+        expect(tester.widget<TextField>(find.byKey(const Key('paid-field'))).focusNode!.hasFocus, isTrue);
+      });
+
+      testWidgets('klik "Sudah dibayar" tetap langsung mencatat', (tester) async {
+        final tx = await openPay(tester, 'qris');
+        await tapKey(tester, const Key('pay-confirm'));
+        expect(tx.calls, hasLength(1));
+      });
+
+      testWidgets('Tunai tidak berubah: Enter di kolom uang langsung bayar', (tester) async {
+        final tx = await pumpKasir(tester);
+        await searchEnter(tester, 'A1');
+        await key(tester, LogicalKeyboardKey.enter);
+        await tester.enterText(find.byKey(const Key('paid-field')), '5000');
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+        await tester.pumpAndSettle();
+        expect(tx.calls.single.method, PaymentMethod.cash);
+      });
+    });
+
     testWidgets('Enter di layar selesai = Transaksi baru; cara bayar terakhir diingat', (tester) async {
       final tx = await pumpKasir(tester);
       await searchEnter(tester, 'A1');
       await key(tester, LogicalKeyboardKey.enter);
       await tapKey(tester, const ValueKey('method-qris'));
-      await key(tester, LogicalKeyboardKey.enter); // "Sudah dibayar"
+      await key(tester, LogicalKeyboardKey.enter); // fokus ke "Sudah dibayar"
+      await key(tester, LogicalKeyboardKey.enter); // catat
       expect(tx.calls.single.method, PaymentMethod.qris);
       expect(find.byKey(const Key('checkout-done')), findsOneWidget);
 

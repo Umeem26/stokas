@@ -154,7 +154,8 @@ class _SummaryLine extends StatelessWidget {
 /// Panel bayar: cara bayar (Tunai bawaan / QRIS / Transfer), uang diterima, uang cepat,
 /// kembalian, dan tombol Bayar yang nonaktif dengan alasan tertulis bila uang kurang.
 /// QRIS/Transfer selalu dibayar pas (server menolak lebih). Keyboard: 1/2/3 pilih cara bayar
-/// (di luar kolom isian), Enter di kolom = Bayar, Esc = kembali.
+/// (di luar kolom isian), Enter di kolom = Bayar, Esc = kembali. QRIS/Transfer: Enter pertama
+/// memfokuskan "Sudah dibayar", Enter kedua (tombol terfokus) baru mencatat; klik tetap langsung.
 class PayPanel extends StatefulWidget {
   final int total;
   final bool busy;
@@ -183,6 +184,7 @@ class _PayPanelState extends State<PayPanel> {
   final _controller = TextEditingController();
   final _fieldFocus = FocusNode();
   final _panelFocus = FocusNode(debugLabel: 'pay-panel');
+  final _confirmFocus = FocusNode(debugLabel: 'pay-confirm');
   late PaymentMethod _method = widget.initialMethod;
 
   @override
@@ -206,6 +208,7 @@ class _PayPanelState extends State<PayPanel> {
     _controller.dispose();
     _fieldFocus.dispose();
     _panelFocus.dispose();
+    _confirmFocus.dispose();
     super.dispose();
   }
 
@@ -237,9 +240,15 @@ class _PayPanelState extends State<PayPanel> {
       if (!widget.busy) widget.onBack();
       return KeyEventResult.handled;
     }
-    // Enter di luar kolom (QRIS/Transfer) = "Sudah dibayar"; di kolom uang ditangani onSubmitted.
+    // QRIS/Transfer: Enter pertama hanya memfokuskan "Sudah dibayar" (uang belum tentu masuk),
+    // Enter kedua saat tombol terfokus baru mencatat. Di kolom uang ditangani onSubmitted.
     final enter = key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.numpadEnter;
-    if (enter && FocusManager.instance.primaryFocus == _panelFocus) {
+    final primary = FocusManager.instance.primaryFocus;
+    if (enter && primary == _panelFocus) {
+      _cash ? _submit() : _confirmFocus.requestFocus();
+      return KeyEventResult.handled;
+    }
+    if (enter && primary == _confirmFocus) {
       _submit();
       return KeyEventResult.handled;
     }
@@ -477,6 +486,7 @@ class _PayPanelState extends State<PayPanel> {
                   ],
                   StokasButton(
                     key: const Key('pay-confirm'),
+                    focusNode: _confirmFocus,
                     label: label,
                     icon: _cash ? Icons.payments_outlined : Icons.check,
                     expand: true,
