@@ -13,6 +13,10 @@ build/
 local.properties
 *.keystore
 *.jks
+key.properties
+
+# Supabase CLI (status lokal)
+supabase/.temp/
 
 # iOS
 .generated/
