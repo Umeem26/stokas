@@ -64,7 +64,7 @@ Akun: `umum` = tanpa login; `kasir` = CASHIER_EMAIL (Kasir1); `gudang` = WAREHOU
 | 18-gudang-opname-selisih.png | Opname | hitung nyata 22 dari 24 (selisih), TIDAK disimpan | gudang |
 | 19-gudang-tulis-rugi-konfirmasi.png | Opname | dialog "Tulis rugi?", ditutup dengan Batal | gudang |
 | 20-gudang-pindah-lantai-terisi.png | Pindah stok | Lantai 2 -> Lantai 1, 6 pcs, TIDAK disimpan | gudang |
-| 21-owner-home.png | Home | omzet hari ini + "Perlu diurus" | owner |
+| 21-owner-home.png | Home | omzet hari ini Rp 435.500 (9 transaksi) + "Perlu diurus" | owner |
 | 22-owner-home-gelap.png | Home | tema gelap | owner |
 | 23-owner-detail-barang.png | Detail barang | dari "Perlu diurus" (harga & modal) | owner |
 | 24-owner-riwayat.png | Riwayat Transaksi | daftar | owner |
@@ -74,7 +74,7 @@ Akun: `umum` = tanpa login; `kasir` = CASHIER_EMAIL (Kasir1); `gudang` = WAREHOU
 | 28-owner-home-offline.png | Home | jaringan mati: "Koneksi terputus" + "Coba lagi" | owner |
 | 29-owner-home-pulih.png | Home | jaringan menyala lagi, "Coba lagi" -> data pulih | owner |
 | 30-pc-kasir-keranjang.png | Kasir PC | tabel keranjang 3 item (Rp 18.900) + panel bayar + "Siap scan" + bilah pintasan, tidak dibayar | kasir |
-| 31-pc-owner-home.png | Home PC | rel samping; omzet Rp 0 (belum ada transaksi hari itu) + "Perlu diurus" | owner |
+| 31-pc-owner-home.png | Home PC | rel samping; omzet hari ini Rp 435.500 (9 transaksi) + "Perlu diurus" | owner |
 | 32-pc-owner-staf.png | Kelola Staf PC | rel samping, apa adanya | owner |
 | checkout.mp4 / checkout.gif | Kasir | rekaman cari -> tambah -> scan kode -> uang cepat -> struk (22,7 dtk, mulai setelah login) | kasir |
 | contact-sheet.png | — | montase semua PNG berlabel nama file | — |
@@ -93,6 +93,8 @@ Akun: `umum` = tanpa login; `kasir` = CASHIER_EMAIL (Kasir1); `gudang` = WAREHOU
   tetapi mengompilasi ulang dart2js tiap jalan (~290 dtk) dan tidak selesai dalam batas 8 menit. Build statis
   cukup sekali, lalu capture 3 layar < 1 menit. Field/tombol dipilih lewat semantics Flutter (label), bukan koordinat.
 - PC hanya 3 layar (Kasir, Home owner, Staf); panel bayar terbuka (31 lama) dihapus karena kolom bayar sudah tampil di 30.
+- 21 dan 31 diambil ulang 19 Okt 2026 setelah data hari ini ditambahkan (sebelumnya omzet Rp 0); hanya kedua file itu
+  yang diganti (tes owner dan `web_static.py` juga memotret 22-27, 30, 32, tetapi file lama itu dipulihkan). Tanpa checkout.
 
 ## DATA DEMO DIUBAH
 
