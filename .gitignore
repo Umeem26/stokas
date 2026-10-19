@@ -33,3 +33,6 @@ integration_test/env.test.json
 
 # Contoh tanpa secret boleh di-commit
 !.env.example
+
+# Media mentah (screenshot/rekaman; set pilihan ada di docs/screenshots/)
+media/raw/
