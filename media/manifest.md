@@ -18,10 +18,13 @@ python integration_test/media/capture.py android
 #    Sebagian tes saja (regex nama tes, diteruskan ke flutter test):
 python integration_test/media/capture.py android --name "gudang|owner"
 
-# 2. PC mode (Chrome 1440x900, dpr 2) lewat flutter drive + onScreenshot (integration_test/media/media_driver.dart).
-#    Butuh chromedriver yang cocok dengan versi Chrome, mis.:
-#    npx @puppeteer/browsers install chromedriver@<versi-chrome>  (di luar repo)
-CHROMEDRIVER=/path/to/chromedriver python integration_test/media/capture.py web
+# 2. PC mode (Chrome 1440x900, dpr 2): build release statis + Playwright (Chrome terpasang, headless).
+#    Hanya membaca: login kasir -> scan 4 kode ke keranjang (tidak dibayar); login owner -> Home, Staf.
+#    Butuh `pip install playwright` (memakai channel chrome, tanpa unduh browser).
+flutter build web --release
+python integration_test/media/web_static.py
+#    Alternatif lama (tidak dipakai, lihat catatan): flutter drive --release lewat chromedriver, batas 8 menit.
+#    CHROMEDRIVER=/path/to/chromedriver python integration_test/media/capture.py web
 
 # 3. Olah: struk PDF -> PNG (203 dpi), checkout.mp4 -> checkout.gif (palettegen, lebar 360, 12 fps, <= 4 MB),
 #    contact-sheet.png, dan set pilihan ke docs/screenshots/ (256 warna, <= ~250 KB per gambar).
@@ -70,7 +73,9 @@ Akun: `umum` = tanpa login; `kasir` = CASHIER_EMAIL (Kasir1); `gudang` = WAREHOU
 | 27-owner-staf-tambah-terisi.png | Tambah Staf | terisi, TIDAK disimpan | owner |
 | 28-owner-home-offline.png | Home | jaringan mati: "Koneksi terputus" + "Coba lagi" | owner |
 | 29-owner-home-pulih.png | Home | jaringan menyala lagi, "Coba lagi" -> data pulih | owner |
-| 30–33 (PC) | Kasir PC, Home PC, Kelola Staf PC | menyusul (capture PC belum selesai) | — |
+| 30-pc-kasir-keranjang.png | Kasir PC | tabel keranjang 3 item (Rp 18.900) + panel bayar + "Siap scan" + bilah pintasan, tidak dibayar | kasir |
+| 31-pc-owner-home.png | Home PC | rel samping; omzet Rp 0 (belum ada transaksi hari itu) + "Perlu diurus" | owner |
+| 32-pc-owner-staf.png | Kelola Staf PC | rel samping, apa adanya | owner |
 | checkout.mp4 / checkout.gif | Kasir | rekaman cari -> tambah -> scan kode -> uang cepat -> struk (22,7 dtk, mulai setelah login) | kasir |
 | contact-sheet.png | — | montase semua PNG berlabel nama file | — |
 
@@ -83,6 +88,11 @@ Akun: `umum` = tanpa login; `kasir` = CASHIER_EMAIL (Kasir1); `gudang` = WAREHOU
 - Terima barang: tanggal kedaluwarsa tidak diisi (opsional; date picker dilewati).
 - Offline: koneksi keep-alive lama tidak langsung putus di emulator, jadi tes menunggu 20 dtk sebelum tarik-untuk-muat-ulang.
 - Mode gelap hanya untuk Login, Keranjang, Home owner (02, 06, 22).
+- PC memakai build statis + Playwright karena paling stabil: `flutter drive -d chrome` (debug) macet di
+  "Waiting for connection from debug service on Chrome" (DWDS tidak pernah tersambung); `--release` lolos tahap itu
+  tetapi mengompilasi ulang dart2js tiap jalan (~290 dtk) dan tidak selesai dalam batas 8 menit. Build statis
+  cukup sekali, lalu capture 3 layar < 1 menit. Field/tombol dipilih lewat semantics Flutter (label), bukan koordinat.
+- PC hanya 3 layar (Kasir, Home owner, Staf); panel bayar terbuka (31 lama) dihapus karena kolom bayar sudah tampil di 30.
 
 ## DATA DEMO DIUBAH
 

@@ -36,3 +36,6 @@ integration_test/env.test.json
 
 # Media mentah (screenshot/rekaman; set pilihan ada di docs/screenshots/)
 media/raw/
+
+# Cache Python skrip media
+__pycache__/
