@@ -32,6 +32,55 @@ It is meant for the three people who run such a store day to day: the owner, the
 | UI | Light and dark theme (follows system), product images in Supabase Storage | Done |
 | — | Items in [Roadmap](#roadmap) | Planned |
 
+## Screenshots
+
+All screenshots use demo data (products `DEMO-01..29`, no real customers). Android: Pixel 9 emulator; PC: Chrome 1440×900.
+The full set, with every state and dialog, is listed in [media/manifest.md](media/manifest.md).
+
+**Launch**
+
+| Splash | Launcher icon | Login |
+|---|---|---|
+| <img src="docs/screenshots/splash.png" width="220" alt="Native splash with the Stokas mark"> | <img src="docs/screenshots/launcher-ikon.png" width="220" alt="Stokas icon on the Android home screen"> | <img src="docs/screenshots/login.png" width="220" alt="Login screen"> |
+| Demo data | Demo data | Demo data |
+
+**Owner**
+
+| Home | Product detail | Staff |
+|---|---|---|
+| <img src="docs/screenshots/owner-home.png" width="220" alt="Owner home: today's revenue and needs-attention list"> | <img src="docs/screenshots/owner-detail-barang.png" width="220" alt="Product detail with selling and cost price"> | <img src="docs/screenshots/owner-staf.png" width="220" alt="Staff accounts"> |
+| Demo data | Demo data | Demo data |
+
+**Cashier**
+
+| Cart | Payment | Receipt |
+|---|---|---|
+| <img src="docs/screenshots/kasir-keranjang.png" width="220" alt="Cart with three items"> | <img src="docs/screenshots/kasir-bayar.png" width="220" alt="Cash payment with quick-cash buttons"> | <img src="docs/screenshots/kasir-struk.png" width="220" alt="Successful transaction with change and receipt"> |
+| Demo data | Demo data | Demo data |
+
+<img src="docs/screenshots/checkout.gif" width="260" alt="Checkout: search, add, scan, quick cash, receipt"><br>Checkout from search to receipt (demo data).
+
+**Warehouse**
+
+| Receive goods | Stock list |
+|---|---|
+| <img src="docs/screenshots/gudang-terima.png" width="220" alt="Receive goods with two lines filled"> | <img src="docs/screenshots/gudang-stok.png" width="220" alt="Warehouse stock list without prices"> |
+| Demo data | Demo data |
+
+**PC**
+
+| Cashier (keyboard-first) | Owner home |
+|---|---|
+| <img src="docs/screenshots/pc-kasir.png" width="420" alt="PC cashier: cart table and payment panel"> | <img src="docs/screenshots/pc-owner-home.png" width="420" alt="PC owner home with side rail"> |
+| Demo data | Demo data |
+
+**Dark mode**
+
+| Cart | Product detail | PC owner home |
+|---|---|---|
+| <img src="docs/screenshots/gelap-kasir-keranjang.png" width="220" alt="Cart in dark theme"> | <img src="docs/screenshots/gelap-owner-detail-barang.png" width="220" alt="Product detail in dark theme"> | <img src="docs/screenshots/gelap-pc-owner-home.png" width="420" alt="PC owner home in dark theme"> |
+| Demo data | Demo data | Demo data |
+
 ## Roles and permissions
 
 Taken from the RLS policies, triggers and RPC checks in [`supabase/migrations/`](supabase/migrations). The app hides menus with `can(role, Permission)` in [`lib/core/permissions.dart`](lib/core/permissions.dart); the database is the real gate.

@@ -2,6 +2,7 @@
 
   python integration_test/media/capture.py android   # Pixel_9: screenshot, mode gelap, offline, rekaman
   python integration_test/media/capture.py android --name "gudang"   # hanya tes yang cocok (argumen diteruskan ke flutter test)
+  python integration_test/media/capture.py brand     # Pixel_9: splash (screenrecord+ffmpeg), ikon di launcher & laci
   python integration_test/media/capture.py web       # Chrome 1440x900 dpr 2 (butuh chromedriver)
   python integration_test/media/capture.py post      # struk PDF->PNG, GIF, contact sheet, docs/screenshots
 
@@ -34,18 +35,26 @@ def supabase_host():
 
 # Set pilihan untuk README: nama di docs/screenshots -> file mentah.
 SELECTION = {
+    'splash': '33-umum-splash',
+    'launcher-ikon': '35-umum-launcher-ikon',
+    'login': '01-umum-login-kosong',
     'owner-home': '21-owner-home',
+    'owner-detail-barang': '23-owner-detail-barang',
+    'owner-staf': '26-owner-staf',
     'kasir-keranjang': '05-kasir-keranjang-3-item',
     'kasir-bayar': '07-kasir-bayar-tunai-uang-cepat',
+    'kasir-struk': '12-kasir-sukses-struk',
     'gudang-terima': '16-gudang-terima-terisi',
-    'owner-staf': '26-owner-staf',
+    'gudang-stok': '15-gudang-stok-daftar',
     'pc-kasir': '30-pc-kasir-keranjang',
     'pc-owner-home': '31-pc-owner-home',
-    'pc-owner-staf': '32-pc-owner-staf',
+    'gelap-kasir-keranjang': '06-kasir-keranjang-3-item-gelap',
+    'gelap-owner-detail-barang': '53-owner-detail-barang-gelap',
+    'gelap-pc-owner-home': '61-pc-owner-home-gelap',
 }
 WEB_TIMEOUT = 8 * 60
 MAX_BYTES = 250 * 1024
-GIF_MAX = 4 * 1024 * 1024
+GIF_MAX = MAX_BYTES
 
 
 def shell_cmd(args):
@@ -159,6 +168,85 @@ def android(extra):
         demo_off()
 
 
+SPLASH_BG = {'no': (0xF6, 0xF8, 0xFB), 'yes': (0x0B, 0x15, 0x24)}
+
+
+def screencap(name):
+    png = adb('exec-out', 'screencap', '-p', capture_output=True).stdout
+    (RAW / f'{name}.png').write_bytes(png)
+    print(f'  {name}.png ({len(png) // 1024} KB)')
+
+
+def splash_frame(frames, bg):
+    """Frame splash terbersih: tengah rentang terpanjang frame yang badannya >= 97% warna latar splash
+    dan bagian tengahnya memuat tanda (bukan layar kosong / UI aplikasi)."""
+    from PIL import Image
+
+    def pixels(im):
+        return getattr(im, 'get_flattened_data', im.getdata)()
+
+    def is_splash(path):
+        im = Image.open(path).convert('RGB')
+        w, h = im.size
+        body = im.crop((0, int(h * 0.08), w, int(h * 0.92))).resize((108, 200))
+        px = list(pixels(body))
+        near = sum(1 for p in px if max(abs(a - b) for a, b in zip(p, bg)) <= 6) / len(px)
+        center = im.crop((w // 2 - 120, h // 2 - 120, w // 2 + 120, h // 2 + 120)).resize((24, 24))
+        mark = sum(1 for p in pixels(center) if max(abs(a - b) for a, b in zip(p, bg)) > 40)
+        return near >= 0.97 and mark >= 10
+
+    best, run = [], []
+    for f in frames:
+        run = run + [f] if is_splash(f) else []
+        if len(run) > len(best):
+            best = run
+    if not best:
+        raise RuntimeError('Tidak ada frame splash')
+    return best[len(best) // 2], len(best)
+
+
+def brand():
+    """Splash (terang/gelap) dari screenrecord + ffmpeg, lalu layar utama & laci aplikasi dengan ikon Stokas."""
+    import tempfile
+
+    RAW.mkdir(parents=True, exist_ok=True)
+    demo_on()
+    try:
+        for night, suffix, n in (('no', '', 33), ('yes', '-gelap', 34)):
+            adb('shell', 'cmd', 'uimode', 'night', night, stdout=subprocess.DEVNULL)
+            adb('shell', 'am', 'force-stop', PKG)
+            adb('shell', 'input', 'keyevent', 'KEYCODE_HOME')
+            time.sleep(2)
+            rec = subprocess.Popen(['adb', '-s', DEVICE, 'shell', 'screenrecord', '--time-limit', '4', '/sdcard/splash.mp4'])
+            time.sleep(0.8)
+            adb('shell', 'monkey', '-p', PKG, '-c', 'android.intent.category.LAUNCHER', '1', stdout=subprocess.DEVNULL)
+            rec.wait(timeout=15)
+            time.sleep(1)
+            with tempfile.TemporaryDirectory() as tmp:
+                mp4 = Path(tmp) / 'splash.mp4'
+                adb('pull', '/sdcard/splash.mp4', str(mp4), stdout=subprocess.DEVNULL)
+                adb('shell', 'rm', '/sdcard/splash.mp4')
+                subprocess.run(['ffmpeg', '-loglevel', 'error', '-i', str(mp4), str(Path(tmp) / 'f%03d.png')], check=True)
+                frame, count = splash_frame(sorted(Path(tmp).glob('f*.png')), SPLASH_BG[night])
+                dest = RAW / f'{n}-umum-splash{suffix}.png'
+                shutil.copy(frame, dest)
+                print(f'  {dest.name} ({frame.name}, {count} frame splash)')
+            adb('shell', 'am', 'force-stop', PKG)
+        for night, suffix, home_n, drawer_n in (('no', '', 35, 37), ('yes', '-gelap', 36, 38)):
+            adb('shell', 'cmd', 'uimode', 'night', night, stdout=subprocess.DEVNULL)
+            adb('shell', 'input', 'keyevent', 'KEYCODE_HOME')
+            time.sleep(3)
+            screencap(f'{home_n}-umum-launcher-ikon{suffix}')
+            adb('shell', 'input', 'swipe', '540', '2000', '540', '600', '300')
+            time.sleep(2)
+            screencap(f'{drawer_n}-umum-laci-aplikasi-ikon{suffix}')
+            adb('shell', 'input', 'keyevent', 'KEYCODE_HOME')
+            time.sleep(1)
+    finally:
+        adb('shell', 'cmd', 'uimode', 'night', 'no', stdout=subprocess.DEVNULL)
+        demo_off()
+
+
 def web():
     driver = os.environ.get('CHROMEDRIVER') or shutil.which('chromedriver')
     if not driver:
@@ -235,16 +323,21 @@ def post():
     mp4 = RAW / 'checkout.mp4'
     gif = RAW / 'checkout.gif'
     if mp4.exists():
-        for colors in (128, 64, 32):
+        # Lebar/fps/warna diturunkan bertahap sampai <= GIF_MAX (batas per gambar README).
+        for width, fps, colors in ((300, 8, 32), (280, 8, 24), (270, 6, 24), (260, 6, 16), (240, 5, 16)):
             subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', str(mp4), '-vf',
-                            f'fps=12,scale=360:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors={colors}:stats_mode=diff[p];'
-                            '[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle', '-loop', '0', str(gif)], check=True)
+                            f'fps={fps},scale={width}:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors={colors}:stats_mode=diff[p];'
+                            '[b][p]paletteuse=dither=none:diff_mode=rectangle', '-loop', '0', str(gif)], check=True)
             if gif.stat().st_size <= GIF_MAX:
                 break
         print(f'checkout.gif {gif.stat().st_size // 1024} KB')
     shots = sorted(p for p in RAW.glob('[0-9][0-9]-*.png'))
-    contact_sheet(shots, RAW / 'contact-sheet.png')
+    contact_sheet([p for p in shots if not p.stem.endswith('-gelap')], RAW / 'contact-sheet-terang.png')
+    contact_sheet([p for p in shots if p.stem.endswith('-gelap')], RAW / 'contact-sheet-gelap.png')
     DOCS.mkdir(parents=True, exist_ok=True)
+    for old in DOCS.glob('*.png'):
+        if old.stem not in SELECTION:
+            old.unlink()  # set pilihan lama yang tidak dipakai lagi
     for name, src in SELECTION.items():
         dest = DOCS / f'{name}.png'
         if not (RAW / f'{src}.png').exists():
@@ -259,6 +352,6 @@ def post():
 if __name__ == '__main__':
     sys.stdout.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
     mode = sys.argv[1] if len(sys.argv) > 1 else ''
-    if mode not in ('android', 'web', 'post'):
+    if mode not in ('android', 'brand', 'web', 'post'):
         sys.exit(__doc__)
-    sys.exit((android(sys.argv[2:]) if mode == 'android' else {'web': web, 'post': post}[mode]()) or 0)
+    sys.exit((android(sys.argv[2:]) if mode == 'android' else {'brand': brand, 'web': web, 'post': post}[mode]()) or 0)

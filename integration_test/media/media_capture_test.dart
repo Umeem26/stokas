@@ -419,6 +419,168 @@ void _androidTests() {
     await pumpUntil(tester, find.byKey(const Key('attention-0')));
     await shot(tester, '29-owner-home-pulih');
   });
+
+  // Perluasan (33-59): keadaan & dialog yang belum ada. Semua dialog ditutup dengan Batal; tanpa checkout.
+  testWidgets('ext kasir — cari kosong, keluar, kosongkan, bayar gelap, riwayat detail', (tester) async {
+    await loginAs(tester, _cashierLogin, _cashierPassword);
+    await pumpUntil(tester, find.byKey(const ValueKey('product-DEMO-01')));
+    await tester.enterText(find.byKey(const Key('cashier-search')), 'zzz');
+    await pumpUntil(tester, find.text('Tidak ada barang yang cocok'));
+    await shot(tester, '40-kasir-kasir-cari-kosong');
+    await tester.enterText(find.byKey(const Key('cashier-search')), '');
+    await pause(tester);
+
+    await tester.tap(find.byTooltip('Akun').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Keluar').last);
+    await pumpUntil(tester, find.text('Keluar?'));
+    await shot(tester, '39-kasir-akun-keluar-dialog');
+    await tester.tap(find.text('Batal'));
+    await pumpUntilGone(tester, find.text('Keluar?'));
+
+    for (final code in ['DEMO-05', 'DEMO-01', 'DEMO-18', 'DEMO-18']) {
+      await scanCode(tester, code);
+    }
+    await pumpUntil(tester, find.textContaining('Keranjang (3)'));
+    await tester.tap(find.byKey(const Key('cart-bar')));
+    await pumpUntil(tester, find.byKey(const Key('cart-page')));
+    await settleRoute(tester);
+    await tester.tap(find.byKey(const Key('clear-cart')));
+    await pumpUntil(tester, find.byKey(const Key('confirm-clear')));
+    await shot(tester, '41-kasir-keranjang-kosongkan-dialog');
+    await tester.tap(find.text('Batal'));
+    await pumpUntilGone(tester, find.byKey(const Key('confirm-clear')));
+
+    await tester.tap(find.byKey(const Key('pay-button')));
+    await pumpUntil(tester, find.byKey(const Key('quick-exact')));
+    await settleRoute(tester);
+    await tester.tap(firstQuickCash());
+    await pause(tester);
+    await darkShot(tester, '42-kasir-bayar-tunai-gelap');
+    await tester.tap(find.byKey(const Key('pay-back'))); // tidak dibayar
+    await pause(tester);
+    final cartPage = find.byKey(const Key('cart-page'));
+    if (cartPage.evaluate().isNotEmpty) Navigator.of(tester.element(cartPage)).pop();
+    await pumpUntilGone(tester, cartPage);
+
+    await openTab(tester, AppTab.riwayatSaya);
+    await pumpUntil(tester, keyPrefix('history-'));
+    await tester.tap(keyPrefix('history-').first);
+    await pumpUntil(tester, find.textContaining(' × '));
+    await shot(tester, '43-kasir-riwayat-detail');
+    await darkShot(tester, '44-kasir-riwayat-detail-gelap');
+    Navigator.of(tester.element(find.textContaining(' × ').first)).pop();
+    await pause(tester);
+  });
+
+  testWidgets('ext gudang — terima kosong/kode baru/pilih/gelap, produk gelap, edit, stok masuk, pindah lantai', (tester) async {
+    await loginAs(tester, _warehouseLogin, _warehousePassword);
+    await pumpUntil(tester, find.textContaining('Belum ada barang'));
+    await pause(tester, 1500); // daftar produk dimuat
+    await shot(tester, '45-gudang-terima-kosong');
+
+    await pickWarehouseProduct(tester, 'receive', '8990000000999');
+    await pumpUntil(tester, find.byKey(const Key('receive-create-product')));
+    await shot(tester, '46-gudang-terima-kode-baru');
+    await tester.enterText(find.byKey(const Key('receive-search')), '');
+    await pause(tester);
+
+    await tester.tap(find.byKey(const Key('receive-add-line')));
+    await pumpUntil(tester, keyPrefix('picker-'));
+    await settleRoute(tester);
+    await shot(tester, '47-gudang-terima-pilih-barang');
+    Navigator.of(tester.element(keyPrefix('picker-').first)).pop();
+    await pause(tester);
+
+    await pickWarehouseProduct(tester, 'receive', 'DEMO-08');
+    await pumpUntil(tester, find.byKey(const Key('receive-qty-1')));
+    await tester.enterText(find.byKey(const Key('receive-qty-1')), '24');
+    await tester.tap(find.descendant(of: find.byKey(const Key('receive-floor-1')), matching: find.text('Lantai 2')));
+    await pickWarehouseProduct(tester, 'receive', 'DEMO-18');
+    await pumpUntil(tester, find.byKey(const Key('receive-qty-2')));
+    await tester.enterText(find.byKey(const Key('receive-qty-2')), '48');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await darkShot(tester, '48-gudang-terima-terisi-gelap'); // TIDAK disimpan
+
+    await openTab(tester, AppTab.produk);
+    await pumpUntil(tester, find.byType(ListView));
+    await darkShot(tester, '49-gudang-stok-daftar-gelap');
+
+    await tester.tap(find.byTooltip('Edit Barang').first);
+    await pumpUntil(tester, find.text('Simpan').hitTestable());
+    await settleRoute(tester);
+    await pause(tester, 1500); // kategori dimuat
+    await shot(tester, '50-gudang-edit-barang'); // TIDAK disimpan
+    await tester.pageBack();
+    await settleRoute(tester);
+
+    await tester.tap(find.byTooltip('Stok Masuk / Opname').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Stok Masuk').last);
+    await pumpUntil(tester, find.byKey(const Key('stockAdjustQty')));
+    await shot(tester, '51-gudang-stok-masuk-dialog');
+    await tester.tap(find.text('Batal'));
+    await pumpUntilGone(tester, find.byKey(const Key('stockAdjustQty')));
+
+    await tester.tap(find.byTooltip('Pindah Lantai').first);
+    await pumpUntil(tester, find.text('Pindahkan'));
+    await settleRoute(tester);
+    await shot(tester, '52-gudang-pindah-lantai-form'); // TIDAK disimpan
+    await tester.pageBack();
+    await settleRoute(tester);
+  });
+
+  testWidgets('ext owner — detail gelap, hapus, stok, tambah barang, staf gelap & dialog', (tester) async {
+    await loginAs(tester, _ownerEmail, _ownerPassword);
+    await pumpUntil(tester, find.byKey(const Key('home-revenue')));
+    await pumpUntil(tester, find.byKey(const Key('attention-0')));
+
+    await tester.tap(find.byKey(const Key('attention-0')));
+    await pumpUntil(tester, find.text('Detail barang'));
+    await settleRoute(tester);
+    await pumpUntil(tester, find.byWidgetPredicate((w) => w is TextField && w.enabled == true && w.decoration?.labelText == 'Modal'));
+    await darkShot(tester, '53-owner-detail-barang-gelap');
+    await tester.ensureVisible(find.byKey(const Key('detail-delete')));
+    await pause(tester);
+    await tester.tap(find.byKey(const Key('detail-delete')));
+    await pumpUntil(tester, find.byKey(const Key('confirm-delete')));
+    await shot(tester, '54-owner-detail-hapus-dialog');
+    await tester.tap(find.text('Batal'));
+    await pumpUntilGone(tester, find.byKey(const Key('confirm-delete')));
+    await tester.pageBack();
+    await pumpUntilGone(tester, find.text('Detail barang'));
+
+    await openTab(tester, AppTab.stok);
+    await pumpUntil(tester, find.byType(ListView));
+    await pause(tester, 1000);
+    await shot(tester, '55-owner-stok-daftar');
+    await tester.tap(find.byKey(const Key('stock-new-product')));
+    await pumpUntil(tester, find.text('Simpan').hitTestable());
+    await settleRoute(tester);
+    await pause(tester, 1500);
+    await shot(tester, '56-owner-tambah-barang-kosong');
+    await tester.pageBack();
+    await settleRoute(tester);
+
+    await openTab(tester, AppTab.staf);
+    await pumpUntil(tester, keyPrefix('staff-actions-'));
+    await darkShot(tester, '57-owner-staf-gelap');
+    final actions = keyPrefix('staff-actions-');
+    await tester.tap(actions.at(1)); // bukan akun sendiri
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Reset password').last);
+    await pumpUntil(tester, find.textContaining('Reset password '));
+    await shot(tester, '58-owner-staf-reset-dialog');
+    await tester.tap(find.text('Batal'));
+    await pumpUntilGone(tester, find.textContaining('Reset password '));
+    await tester.tap(actions.at(1));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining(RegExp(r'^(Nonaktifkan|Aktifkan)$')).last);
+    await pumpUntil(tester, find.byKey(const Key('confirm-toggle-active')));
+    await shot(tester, '59-owner-staf-nonaktifkan-dialog');
+    await tester.tap(find.text('Batal'));
+    await pumpUntilGone(tester, find.byKey(const Key('confirm-toggle-active')));
+  });
 }
 
 void _webTests() {
