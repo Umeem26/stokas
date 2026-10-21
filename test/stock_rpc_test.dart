@@ -110,6 +110,23 @@ void main() {
     ]);
   });
 
+  testWidgets('Mutasi: nama barang panjang tidak meluap di 360 dp, font 1.3', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+    final source = row(1, 'A', 5);
+    (source['products'] as Map<String, dynamic>)['brand_name'] =
+        'Mie Kuah Ayam Bawang 70 g Rasa Spesial Pedas Ekstra Kemasan Hemat Keluarga';
+    await pumpApp(tester, MutationScreen(sourceStock: source), stock: FakeStockRepository([source]));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull, reason: 'tanpa RenderFlex overflow');
+    expect(find.textContaining('Mie Kuah Ayam Bawang 70 g'), findsOneWidget);
+  });
+
   testWidgets('Kasir: stok kurang dari server -> stok dimuat ulang dan pengguna diberi tahu', (tester) async {
     final stock = FakeStockRepository([row(1, 'A', 5)]);
     final transactions = FakeTransactionRepository()

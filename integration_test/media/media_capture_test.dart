@@ -521,11 +521,19 @@ void _androidTests() {
     await shot(tester, '51-gudang-stok-masuk-dialog');
     await tester.tap(find.text('Batal'));
     await pumpUntilGone(tester, find.byKey(const Key('stockAdjustQty')));
+  });
+
+  testWidgets('ext gudang — pindah lantai terang & gelap', (tester) async {
+    await loginAs(tester, _warehouseLogin, _warehousePassword);
+    await openTab(tester, AppTab.produk);
+    await pumpUntil(tester, find.byType(ListView));
+    await pause(tester, 1500); // daftar produk dimuat
 
     await tester.tap(find.byTooltip('Pindah Lantai').first);
     await pumpUntil(tester, find.text('Pindahkan'));
     await settleRoute(tester);
     await shot(tester, '52-gudang-pindah-lantai-form'); // TIDAK disimpan
+    await darkShot(tester, '52-gudang-pindah-lantai-form-gelap');
     await tester.pageBack();
     await settleRoute(tester);
   });

@@ -147,7 +147,7 @@ Akun: `umum` = tanpa login; `kasir` = CASHIER_EMAIL (Kasir1); `gudang` = WAREHOU
 | 49-gudang-stok-daftar-gelap.png | Produk | tema gelap | gudang |
 | 50-gudang-edit-barang.png | Edit barang | tanpa harga, TIDAK disimpan | gudang |
 | 51-gudang-stok-masuk-dialog.png | Dialog Stok Masuk | kosong, ditutup Batal | gudang |
-| 52-gudang-pindah-lantai-form.png | Pindah Lokasi Stok | form; memperlihatkan bug overflow (lihat catatan) | gudang |
+| 52-gudang-pindah-lantai-form.png / 52-...-gelap.png | Pindah Lokasi Stok | form, nama panjang 2 baris, terang / gelap, TIDAK disimpan | gudang |
 | 53-owner-detail-barang-gelap.png | Detail barang | tema gelap | owner |
 | 54-owner-detail-hapus-dialog.png | Detail barang | dialog "Hapus ...?", Batal | owner |
 | 55-owner-stok-daftar.png | Stok | dengan harga | owner |
@@ -172,8 +172,8 @@ Akun: `umum` = tanpa login; `kasir` = CASHIER_EMAIL (Kasir1); `gudang` = WAREHOU
 - Mode gelap (perluasan 21 Okt 2026): Login, Home owner, Detail barang, Staf, Keranjang, Bayar, struk (lembar detail
   Riwayat, 44, karena layar "Transaksi berhasil" butuh checkout), Terima, Produk; PC: Kasir, Home.
 - 22 (Home gelap) dan 29 diambil pada hari lain: omzet Rp 95.950, tidak sama dengan 21. Galeri memakai 61 untuk Home gelap.
-- BUG ditemukan (tidak diperbaiki; logika aplikasi tidak diubah): di "Pindah Lokasi Stok" nama barang panjang
-  meluap 28 px ke kanan (garis kuning-hitam debug di 52). 52 tidak dipakai di galeri.
+- Overflow 28 px nama barang panjang di "Pindah Lokasi Stok" sudah diperbaiki (21 Okt 2026); 52 diambil ulang
+  terang + gelap lewat tes tersendiri `ext gudang — pindah lantai terang & gelap` (45-51 tidak ikut tertimpa).
 - Data hari ini untuk 33-64: transaksi demo id 90-98 (Rp 435.500, aslinya 19 Okt) digeser sementara ke tanggal
   tangkap lewat SQL (`created_at`), lalu dikembalikan ke 19 Okt. Tanpa checkout; stok tidak berubah.
 - PC memakai build statis + Playwright karena paling stabil: `flutter drive -d chrome` (debug) macet di
